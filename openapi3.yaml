@@ -7,64 +7,121 @@ info:
     name: MIT
     url: https://opensource.org/licenses/MIT
 paths:
-  /anotherResource:
-    get:
-      operationId: getAnotherResource
-      tags:
-        - anotherResource
-      summary: gets the resource
-      responses:
-        200:
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/anotherResource'
-        400:
-          description: Bad Request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/error'
-  /resourceName:
-    get:
-      operationId: getResourceName
-      tags:
-        - resourceName
-      summary: gets the resource
-      responses:
-        200:
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/resource'
-        400:
-          description: Bad Request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/error'
+  /record:
     post:
-      operationId: createResource
+      operationId: createRecord
       tags:
-        - resourceName
-      summary: creates a new record of type resource
+        - record
+      summary: Start an ingestion process flow
+      description: Validates the request (light & fast) and creates a Jobnik ingestion job.
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/resource'
+              $ref: '#/components/schemas/ingestionPayload'
       responses:
         201:
-          description: created
+          description: Ingestion job created
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/resource'
+                $ref: '#/components/schemas/jobResponse'
         400:
           description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/error'
+  /record/{id}:
+    delete:
+      operationId: deleteRecord
+      tags:
+        - record
+      summary: Start a delete process flow
+      description: Validates the record can be deleted and creates a Jobnik delete job.
+      parameters:
+        - $ref: '#/components/parameters/recordId'
+      responses:
+        200:
+          description: Delete job created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jobResponse'
+        400:
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/error'
+        404:
+          description: Record not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/error'
+    patch:
+      operationId: updateRecord
+      tags:
+        - record
+      summary: Update metadata for a record
+      parameters:
+        - $ref: '#/components/parameters/recordId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/updatePayload'
+      responses:
+        200:
+          description: Metadata updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ackResponse'
+        400:
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/error'
+        404:
+          description: Record not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/error'
+  /record/status/{id}:
+    patch:
+      operationId: updateRecordStatus
+      tags:
+        - record
+      summary: Update the publish/unpublish status of a record
+      parameters:
+        - $ref: '#/components/parameters/recordId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/statusPayload'
+      responses:
+        200:
+          description: Status updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ackResponse'
+        400:
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/error'
+        404:
+          description: Record not found
           content:
             application/json:
               schema:
@@ -72,6 +129,14 @@ paths:
 security:
   - {}
 components:
+  parameters:
+    recordId:
+      name: id
+      in: path
+      required: true
+      description: The record identifier
+      schema:
+        type: string
   schemas:
     error:
       type: object
@@ -80,27 +145,51 @@ components:
       properties:
         message:
           type: string
-    resource:
+    ingestionPayload:
       type: object
       required:
-        - id
-        - name
-        - description
+        - modelPath
+        - tilesetFilename
+        - metadata
       properties:
-        id:
-          type: number
-          format: int64
-        name:
+        modelPath:
           type: string
-        description:
+          description: Path on the shared storage to the 3DTiles folder or 3TZ archive
+        tilesetFilename:
           type: string
-    anotherResource:
+          description: The tileset entry name (e.g. tileset.json)
+        metadata:
+          type: object
+          description: 3D record metadata (business validation applied downstream)
+          additionalProperties: true
+    updatePayload:
+      type: object
+      description: Partial metadata fields to update
+      additionalProperties: true
+    statusPayload:
       type: object
       required:
-        - kind
-        - isAlive
+        - status
       properties:
-        kind:
+        status:
           type: string
-        isAlive:
-          type: boolean
+          enum:
+            - PUBLISHED
+            - UNPUBLISHED
+    jobResponse:
+      type: object
+      required:
+        - jobId
+        - status
+      properties:
+        jobId:
+          type: string
+        status:
+          type: string
+    ackResponse:
+      type: object
+      required:
+        - message
+      properties:
+        message:
+          type: string
