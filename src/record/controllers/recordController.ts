@@ -28,10 +28,10 @@ export class RecordController {
     });
   }
 
-  public createRecord: TypedRequestHandlers['createRecord'] = (req, res, next) => {
+  public createRecord: TypedRequestHandlers['createRecord'] = async (req, res, next) => {
     const logContext = { ...this.logContext, function: this.createRecord.name };
     try {
-      const job = this.manager.createIngestion(req.body);
+      const job = await this.manager.createIngestion(req.body);
       this.ingestionJobCounter.inc(1);
       return res.status(StatusCodes.CREATED).json(job);
     } catch (err) {

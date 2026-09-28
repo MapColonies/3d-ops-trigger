@@ -1,5 +1,5 @@
 import { jsLogger } from '@map-colonies/js-logger';
-import { describe, beforeEach, it, expect, beforeAll } from 'vitest';
+import { describe, beforeEach, it, expect, beforeAll, vi } from 'vitest';
 import { trace } from '@opentelemetry/api';
 import httpStatusCodes from 'http-status-codes';
 import { createRequestSender, type RequestSender } from '@map-colonies/openapi-supertest';
@@ -7,11 +7,19 @@ import type { paths, operations } from '@openapi';
 import { getApp } from '@src/app';
 import { SERVICES } from '@common/constants';
 import { initConfig } from '@src/common/config';
+import { LookupTablesCall } from '@src/externalServices/lookupTables/lookupTablesCall';
+import { CatalogCall } from '@src/externalServices/catalog/catalogCall';
+import { buildValidMetadata } from '@tests/helpers/metadata';
+
+const lookupStub = { getClassifications: vi.fn().mockResolvedValue(['abc123']) } as unknown as LookupTablesCall;
+const catalogStub = { findRecords: vi.fn().mockResolvedValue([]) } as unknown as CatalogCall;
+
+const validMetadata = buildValidMetadata();
 
 const validIngestionPayload = {
   modelPath: '/shared/models/afula',
   tilesetFilename: 'tileset.json',
-  metadata: { productName: 'afula', productType: 'PHOTO_REALISTIC' },
+  metadata: validMetadata,
 };
 
 describe('record', function () {
@@ -26,6 +34,8 @@ describe('record', function () {
       override: [
         { token: SERVICES.LOGGER, provider: { useValue: await jsLogger({ enabled: false }) } },
         { token: SERVICES.TRACER, provider: { useValue: trace.getTracer('testTracer') } },
+        { token: LookupTablesCall, provider: { useValue: lookupStub } },
+        { token: CatalogCall, provider: { useValue: catalogStub } },
       ],
       useChild: true,
     });
@@ -49,6 +59,15 @@ describe('record', function () {
       const response = await requestSender.createRecord({
         // @ts-expect-error intentionally invalid: missing tilesetFilename and metadata
         requestBody: { modelPath: '/shared/models/afula' },
+      });
+
+      expect(response).toSatisfyApiSpec();
+      expect(response.status).toBe(httpStatusCodes.BAD_REQUEST);
+    });
+
+    it('should return 400 when metadata fails business validation', async function () {
+      const response = await requestSender.createRecord({
+        requestBody: { ...validIngestionPayload, metadata: { ...validMetadata, productType: 'NOT_A_3D_TYPE' } },
       });
 
       expect(response).toSatisfyApiSpec();

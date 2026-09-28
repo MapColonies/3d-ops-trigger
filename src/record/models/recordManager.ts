@@ -3,6 +3,7 @@ import { inject, injectable } from 'tsyringe';
 import type { components } from '@openapi';
 import { SERVICES } from '@common/constants';
 import type { LogContext } from '@common/interfaces';
+import { ValidationManager } from '../../validator/validationManager';
 
 export type IngestionPayload = components['schemas']['ingestionPayload'];
 export type UpdatePayload = components['schemas']['updatePayload'];
@@ -14,16 +15,20 @@ export type AckResponse = components['schemas']['ackResponse'];
 export class RecordManager {
   private readonly logContext: LogContext;
 
-  public constructor(@inject(SERVICES.LOGGER) private readonly logger: Logger) {
+  public constructor(
+    @inject(SERVICES.LOGGER) private readonly logger: Logger,
+    @inject(ValidationManager) private readonly validator: ValidationManager
+  ) {
     this.logContext = {
       fileName: __filename,
       class: RecordManager.name,
     };
   }
 
-  public createIngestion(payload: IngestionPayload): JobResponse {
+  public async createIngestion(payload: IngestionPayload): Promise<JobResponse> {
     const logContext = { ...this.logContext, function: this.createIngestion.name };
     this.logger.info({ msg: 'creating ingestion job', logContext, modelPath: payload.modelPath, tilesetFilename: payload.tilesetFilename });
+    await this.validator.validateIngestion(payload.metadata);
     return { jobId: 'stub-ingestion-job-id', status: 'PENDING' };
   }
 
