@@ -1,17 +1,17 @@
 apiVersion: backstage.io/v1alpha1
 kind: Component
 metadata:
-  name: ts-server-boilerplate
-  description: A boilerplate github repo for a REST API service in NodeJS for MapColonies
+  name: 3d-ops-trigger
+  description: Entry point for 3D operations (ingest, delete, update, publish/unpublish) — validates requests and triggers Jobnik jobs
   annotations:
-    github.com/project-slug: MapColonies/ts-server-boilerplate
+    github.com/project-slug: MapColonies/3d-ops-trigger
   tags:
     - nodejs
     - typescript
     - expressjs
-    - boilerplate
+    - 3d
 spec:
   type: service
   lifecycle: production
   owner: DevInfra
-  system: boilerplate
+  system: 3d

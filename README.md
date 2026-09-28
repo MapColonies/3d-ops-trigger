@@ -1,124 +1,53 @@
-# Map Colonies typescript service template
+# 3D Operations Trigger
 
 ----------------------------------
 
-This is a basic repo template for building new MapColonies web services in Typescript.
+Entry point for 3D operations — **ingest, delete, update, publish/unpublish**. It validates incoming requests (light & fast) and triggers the corresponding [Jobnik](https://mapcolonies.github.io/infra-portal/docs/knowledge-base/jobnik) jobs. Successor to the legacy `3d-gateway` (and, in the near future, `store-trigger`).
 
-> [!IMPORTANT]
-> To regenerate the types on openapi change run the command `npm run generate:openapi-types`.
-
-> [!WARNING]
-> After creating a new repo based on this template, you should delete the CODEOWNERS file.
-
-
-## Development
-When in development you should use the command `npm run start:dev`. The main benefits are that it enables offline mode for the config package, and source map support for NodeJS errors.
-
-### Template Features:
-
-- eslint configuration by [@map-colonies/eslint-config](https://github.com/MapColonies/eslint-config)
-
-- prettier configuration by [@map-colonies/prettier-config](https://github.com/MapColonies/prettier-config)
-
-- jest
-
-- .nvmrc
-
-- Multi stage production-ready Dockerfile
-
-- commitlint
-
-- git hooks
-
-- logging by [@map-colonies/js-logger](https://github.com/MapColonies/js-logger)
-
-- OpenAPI request validation
-
-- config load with [node-config](https://www.npmjs.com/package/node-config)
-
-- Tracing and metrics by [@map-colonies/telemetry](https://github.com/MapColonies/telemetry)
-
-- github templates
-
-- bug report
-
-- feature request
-
-- pull request
-
-- github actions
-
-- on pull_request
-
-- LGTM
-
-- test
-
-- lint
-
-- snyk
+> Epic: MAPCO-11833 · Design: [3D Ingestion High level architecture](https://mapcolonies.atlassian.net/wiki/spaces/MAPConflicResolution/pages/3342172161) · See [docs/PRD.md](./docs/PRD.md)
 
 ## API
-Checkout the OpenAPI spec [here](/openapi3.yaml)
+
+| Endpoint | Method | Summary |
+| --- | --- | --- |
+| `/record` | POST | Start an ingestion flow (validate, create Jobnik ingestion job) |
+| `/record/{id}` | DELETE | Validate deletability, create Jobnik delete job |
+| `/record/{id}` | PATCH | Update metadata for a record |
+| `/record/status/{id}` | PATCH | Publish / unpublish a record |
+
+Full OpenAPI spec: [openapi3.yaml](/openapi3.yaml). Regenerate types on spec change with `npm run generate:openapi-types`.
+
+## Requirements
+
+- **Node.js ≥ 24** (required by `@map-colonies/jobnik-sdk`). Use the pinned version via `nvm use`.
 
 ## Installation
 
-Install deps with npm
-
 ```bash
 npm install
 ```
+
+> During development this service consumes `@map-colonies/3d-shared` (and, later, mc-models v2) via local `file:` links until those packages are published to npm.
 
 ## Run Locally
 
-Clone the project
-
 ```bash
-
-git clone https://link-to-project
-
-```
-
-Go to the project directory
-
-```bash
-
-cd my-project
-
-```
-
-Install dependencies
-
-```bash
-
-npm install
-
-```
-
-Start the server
-
-```bash
-
-npm run start
-
+npm run start        # build + run
+npm run start:dev    # offline config + source maps
 ```
 
 ## Running Tests
 
-To run tests, run the following command
-
 ```bash
-
-npm run test
-
+npm run test              # all
+npm run test:unit         # unit only
+npm run test:integration  # integration only
 ```
 
-To only run unit tests:
-```bash
-npm run test:unit
-```
+## Development notes
 
-To only run integration tests:
-```bash
-npm run test:integration
-```
+- eslint / prettier via `@map-colonies/eslint-config` and `@map-colonies/prettier-config`
+- vitest for tests
+- OpenAPI request validation at the middleware layer
+- config via [node-config](https://www.npmjs.com/package/node-config)
+- tracing & metrics via `@map-colonies/telemetry`
