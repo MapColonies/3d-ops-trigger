@@ -30,6 +30,13 @@ data:
   {{- end }}
   {{- end }}
   npm_config_cache: /tmp/
+  {{- with .Values.externalServices }}
+  CATALOG_URL: {{ .catalog | quote }}
+  {{- with .lookupTables }}
+  LOOKUP_TABLES_URL: {{ .url | quote }}
+  LOOKUP_TABLES_SUB_URL: {{ .subUrl | quote }}
+  {{- end }}
+  {{- end }}
   {{- with .Values.configManagement }}
   CONFIG_NAME: {{ .name | quote }}
   CONFIG_VERSION: {{ .version | quote }}
