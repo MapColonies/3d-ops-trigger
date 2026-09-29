@@ -84,6 +84,27 @@ externalServices:
     url: ''
     subUrl: ''
 
+jobManager:
+  url:
+  ingestion:
+    jobType: ''
+    taskType: ''
+    batches:
+  delete:
+    jobType: ''
+    taskType: ''
+
+provider: 'NFS'
+NFS:
+  pvPath: ''
+S3:
+  endpointUrl: ''
+  bucket: ''
+  region: ''
+  forcePathStyle: true
+  sslEnabled: false
+  maxAttempts: 3
+
 telemetry:
   logger:
     level: info

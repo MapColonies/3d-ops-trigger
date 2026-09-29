@@ -40,11 +40,11 @@ export class RecordController {
     }
   };
 
-  public deleteRecord: TypedRequestHandlers['deleteRecord'] = (req, res, next) => {
+  public deleteRecord: TypedRequestHandlers['deleteRecord'] = async (req, res, next) => {
     const logContext = { ...this.logContext, function: this.deleteRecord.name };
     const { id } = req.params;
     try {
-      const job = this.manager.deleteRecord(id);
+      const job = await this.manager.deleteRecord(id);
       return res.status(StatusCodes.OK).json(job);
     } catch (err) {
       this.logger.error({ msg: 'failed to create delete job', logContext, err, recordId: id });

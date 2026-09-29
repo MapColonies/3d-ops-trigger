@@ -2,14 +2,22 @@ import { jsLogger } from '@map-colonies/js-logger';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { RecordManager, type IngestionPayload } from '@src/record/models/recordManager';
 import type { ValidationManager } from '@src/validator/validationManager';
+import type { JobnikClient } from '@src/externalServices/jobnik/jobnikClient';
 
-const noopValidator = { validateIngestion: vi.fn().mockResolvedValue(undefined) } as unknown as ValidationManager;
+const noopValidator = {
+  validateIngestion: vi.fn().mockResolvedValue(undefined),
+  validateDelete: vi.fn().mockResolvedValue({ id: 'rec-1', productName: 'afula' }),
+} as unknown as ValidationManager;
+const jobnikStub = {
+  createIngestionJob: vi.fn().mockResolvedValue({ jobId: 'job-1', status: 'PENDING' }),
+  createDeleteJob: vi.fn().mockResolvedValue({ jobId: 'del-1', status: 'PENDING' }),
+} as unknown as JobnikClient;
 
 describe('RecordManager', function () {
   let manager: RecordManager;
 
   beforeEach(async function () {
-    manager = new RecordManager(await jsLogger({ enabled: false }), noopValidator);
+    manager = new RecordManager(await jsLogger({ enabled: false }), noopValidator, jobnikStub);
   });
 
   describe('createIngestion', function () {
@@ -28,8 +36,8 @@ describe('RecordManager', function () {
   });
 
   describe('deleteRecord', function () {
-    it('should return a job response', function () {
-      const result = manager.deleteRecord('rec-1');
+    it('should return a job response', async function () {
+      const result = await manager.deleteRecord('rec-1');
 
       expect(result.jobId).toBeTypeOf('string');
       expect(result.status).toBeTypeOf('string');

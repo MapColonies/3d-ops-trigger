@@ -37,6 +37,28 @@ data:
   LOOKUP_TABLES_SUB_URL: {{ .subUrl | quote }}
   {{- end }}
   {{- end }}
+  {{- with .Values.jobManager }}
+  JOB_MANAGER_URL: {{ .url | quote }}
+  JOB_INGESTION_TYPE: {{ .ingestion.jobType | quote }}
+  TASK_INGESTION_TYPE: {{ .ingestion.taskType | quote }}
+  INGESTION_TASK_BATCHES: {{ .ingestion.batches | quote }}
+  JOB_DELETE_TYPE: {{ .delete.jobType | quote }}
+  TASK_DELETE_TYPE: {{ .delete.taskType | quote }}
+  {{- end }}
+  PROVIDER_FROM: {{ .Values.provider | quote }}
+  {{- if eq .Values.provider "NFS" }}
+  PV_SOURCE_PATH: {{ .Values.NFS.pvPath | quote }}
+  {{- end }}
+  {{- if eq .Values.provider "S3" }}
+  {{- with .Values.S3 }}
+  S3_ENDPOINT_URL: {{ .endpointUrl | quote }}
+  S3_BUCKET: {{ .bucket | quote }}
+  S3_REGION: {{ .region | quote }}
+  S3_FORCE_PATH_STYLE: {{ .forcePathStyle | quote }}
+  S3_SSL_ENABLED: {{ .sslEnabled | quote }}
+  S3_MAX_ATTEMPTS: {{ .maxAttempts | quote }}
+  {{- end }}
+  {{- end }}
   {{- with .Values.configManagement }}
   CONFIG_NAME: {{ .name | quote }}
   CONFIG_VERSION: {{ .version | quote }}
