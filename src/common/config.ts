@@ -11,7 +11,45 @@ interface ExternalServicesConfig {
   catalog: string;
 }
 
-type OpsTriggerConfigType = commonBoilerplateV3Type & { externalServices: ExternalServicesConfig };
+interface JobManagerConfig {
+  url: string;
+  ingestion: {
+    jobType: string;
+    taskType: string;
+    batches: number;
+  };
+  delete: {
+    jobType: string;
+    taskType: string;
+  };
+}
+
+interface NFSConfig {
+  pvPath: string;
+}
+
+interface S3Config {
+  accessKeyId: string;
+  secretAccessKey: string;
+  endpointUrl: string;
+  bucket: string;
+  region: string;
+  forcePathStyle: boolean;
+  sslEnabled: boolean;
+  maxAttempts: number;
+}
+
+type ProviderSource = 'NFS' | 'S3';
+
+type OpsTriggerConfigType = commonBoilerplateV3Type & {
+  externalServices: ExternalServicesConfig;
+  jobManager: JobManagerConfig;
+  provider: ProviderSource;
+  // eslint-disable-next-line @typescript-eslint/naming-convention
+  NFS: NFSConfig;
+  // eslint-disable-next-line @typescript-eslint/naming-convention
+  S3: S3Config;
+};
 
 type ConfigType = ConfigInstance<OpsTriggerConfigType>;
 
@@ -22,8 +60,30 @@ const opsTriggerConfigSchema = {
     { $ref: commonBoilerplateV3.$id },
     {
       type: 'object',
-      required: ['externalServices'],
+      required: ['externalServices', 'jobManager', 'provider'],
       properties: {
+        provider: { type: 'string', enum: ['NFS', 'S3'] },
+        // eslint-disable-next-line @typescript-eslint/naming-convention
+        NFS: {
+          type: 'object',
+          required: ['pvPath'],
+          properties: { pvPath: { type: 'string' } },
+        },
+        // eslint-disable-next-line @typescript-eslint/naming-convention
+        S3: {
+          type: 'object',
+          required: ['accessKeyId', 'secretAccessKey', 'endpointUrl', 'bucket', 'region', 'forcePathStyle', 'sslEnabled', 'maxAttempts'],
+          properties: {
+            accessKeyId: { type: 'string' },
+            secretAccessKey: { type: 'string' },
+            endpointUrl: { type: 'string' },
+            bucket: { type: 'string' },
+            region: { type: 'string' },
+            forcePathStyle: { type: 'boolean' },
+            sslEnabled: { type: 'boolean' },
+            maxAttempts: { type: 'number' },
+          },
+        },
         externalServices: {
           type: 'object',
           required: ['lookupTables', 'catalog'],
@@ -37,6 +97,30 @@ const opsTriggerConfigSchema = {
               },
             },
             catalog: { type: 'string' },
+          },
+        },
+        jobManager: {
+          type: 'object',
+          required: ['url', 'ingestion', 'delete'],
+          properties: {
+            url: { type: 'string' },
+            ingestion: {
+              type: 'object',
+              required: ['jobType'],
+              properties: {
+                jobType: { type: 'string' },
+                taskType: { type: 'string' },
+                batches: { type: 'number' },
+              },
+            },
+            delete: {
+              type: 'object',
+              required: ['jobType'],
+              properties: {
+                jobType: { type: 'string' },
+                taskType: { type: 'string' },
+              },
+            },
           },
         },
       },
@@ -61,4 +145,4 @@ function getConfig(): ConfigType {
 }
 
 export { getConfig, initConfig };
-export type { ConfigType, LookupTablesConfig, ExternalServicesConfig };
+export type { ConfigType, LookupTablesConfig, ExternalServicesConfig, JobManagerConfig, NFSConfig, S3Config, ProviderSource };

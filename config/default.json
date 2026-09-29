@@ -39,5 +39,31 @@
       "url": "http://127.0.0.1:8080",
       "subUrl": "lookup-tables/lookupData"
     }
+  },
+  "jobManager": {
+    "url": "http://127.0.0.1:8080",
+    "ingestion": {
+      "jobType": "Ingestion_New_3D",
+      "taskType": "tilesCopying",
+      "batches": 100
+    },
+    "delete": {
+      "jobType": "Delete_3D",
+      "taskType": "deleteModel"
+    }
+  },
+  "provider": "NFS",
+  "NFS": {
+    "pvPath": "/app/models"
+  },
+  "S3": {
+    "accessKeyId": "minio",
+    "secretAccessKey": "minio",
+    "endpointUrl": "http://127.0.0.1:9000",
+    "bucket": "3dtiles",
+    "region": "us-east-1",
+    "forcePathStyle": true,
+    "sslEnabled": false,
+    "maxAttempts": 3
   }
 }

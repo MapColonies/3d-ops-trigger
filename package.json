@@ -34,6 +34,7 @@
     "node": ">=24.0.0"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1142.0",
     "@godaddy/terminus": "^4.12.1",
     "@map-colonies/3d-shared": "file:../../3d-general/3d-shared",
     "@map-colonies/config": "^4.0.1",

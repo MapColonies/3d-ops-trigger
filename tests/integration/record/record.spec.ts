@@ -9,10 +9,30 @@ import { SERVICES } from '@common/constants';
 import { initConfig } from '@src/common/config';
 import { LookupTablesCall } from '@src/externalServices/lookupTables/lookupTablesCall';
 import { CatalogCall } from '@src/externalServices/catalog/catalogCall';
+import { JobnikClient } from '@src/externalServices/jobnik/jobnikClient';
 import { buildValidMetadata } from '@tests/helpers/metadata';
 
+const deletableRecord = {
+  id: 'rec-1',
+  productId: 'p-1',
+  productName: 'afula',
+  productType: '3DPhotoRealistic',
+  productVersion: 1,
+  producerName: 'IDFMU',
+  productStatus: 'UNPUBLISHED',
+};
+
 const lookupStub = { getClassifications: vi.fn().mockResolvedValue(['abc123']) } as unknown as LookupTablesCall;
-const catalogStub = { findRecords: vi.fn().mockResolvedValue([]) } as unknown as CatalogCall;
+// findRecords by id (delete) → an existing deletable record; by productName (uniqueness) → none
+const catalogStub = {
+  findRecords: vi.fn().mockImplementation((payload: { id?: string }) => (payload.id !== undefined ? [deletableRecord] : [])),
+} as unknown as CatalogCall;
+const jobnikStub = {
+  createIngestionJob: vi.fn().mockResolvedValue({ jobId: 'job-1', status: 'PENDING' }),
+  createDeleteJob: vi.fn().mockResolvedValue({ jobId: 'del-1', status: 'PENDING' }),
+  hasInFlightIngestionJob: vi.fn().mockResolvedValue(false),
+} as unknown as JobnikClient;
+const providerStub = { fileExists: vi.fn().mockResolvedValue(true) };
 
 const validMetadata = buildValidMetadata();
 
@@ -36,6 +56,8 @@ describe('record', function () {
         { token: SERVICES.TRACER, provider: { useValue: trace.getTracer('testTracer') } },
         { token: LookupTablesCall, provider: { useValue: lookupStub } },
         { token: CatalogCall, provider: { useValue: catalogStub } },
+        { token: JobnikClient, provider: { useValue: jobnikStub } },
+        { token: SERVICES.PROVIDER, provider: { useValue: providerStub } },
       ],
       useChild: true,
     });
