@@ -1,9 +1,11 @@
-import { inject, injectable } from 'tsyringe';
+import { inject, singleton } from 'tsyringe';
+import { StatusCodes } from 'http-status-codes';
 import type { Logger } from '@map-colonies/js-logger';
 import type { Registry } from 'prom-client';
 import { JobnikSDK } from '@map-colonies/jobnik-sdk';
-import { SERVICES, STAGE_TYPES } from '@common/constants';
+import { IN_FLIGHT_JOB_STATUSES, SERVICES, STAGE_TYPES } from '@common/constants';
 import { is3tz } from '@common/util';
+import { AppError } from '@common/appError';
 import type { ConfigType, JobManagerConfig } from '@common/config';
 import type { LogContext } from '@common/interfaces';
 import type { IngestionPayload, JobResponse } from '../../record/models/recordManager';
@@ -16,10 +18,11 @@ interface StageDescriptor {
   only3tz?: boolean;
 }
 
-@injectable()
+@singleton()
 export class JobnikClient {
   private readonly logContext: LogContext;
   private readonly producer: ReturnType<JobnikSDK['getProducer']>;
+  private readonly apiClient: ReturnType<JobnikSDK['getApiClient']>;
   private readonly jobManager: JobManagerConfig;
 
   public constructor(
@@ -30,10 +33,40 @@ export class JobnikClient {
     this.jobManager = this.config.get('jobManager');
     const sdk = new JobnikSDK({ baseUrl: this.jobManager.url, metricsRegistry: this.metricsRegistry });
     this.producer = sdk.getProducer();
+    this.apiClient = sdk.getApiClient();
     this.logContext = {
       fileName: __filename,
       class: JobnikClient.name,
     };
+  }
+
+  public async hasInFlightIngestionJob(productName: string): Promise<boolean> {
+    const logContext = { ...this.logContext, function: this.hasInFlightIngestionJob.name };
+    const pageSize = 100;
+
+    for (let page = 1; ; page++) {
+      const { data, error } = await this.apiClient.GET('/v1/jobs', {
+        // eslint-disable-next-line @typescript-eslint/naming-convention -- Jobnik query params are snake_case
+        params: { query: { job_name: this.jobManager.ingestion.jobType, page, page_size: pageSize } },
+      });
+      if (error !== undefined) {
+        this.logger.error({ msg: 'failed querying Jobnik for in-flight jobs', logContext, productName, err: error });
+        throw new AppError('jobnik', StatusCodes.INTERNAL_SERVER_ERROR, 'failed querying Jobnik for in-flight jobs', false);
+      }
+
+      const jobs = data.items;
+      const match = jobs.some((job) => {
+        const metadata = (job.data as { metadata?: { productName?: string } }).metadata;
+        return IN_FLIGHT_JOB_STATUSES.includes(job.status) && metadata?.productName === productName;
+      });
+      if (match) {
+        this.logger.debug({ msg: 'in-flight ingestion job found', logContext, productName });
+        return true;
+      }
+      if (jobs.length < pageSize) {
+        return false;
+      }
+    }
   }
 
   public async createIngestionJob(payload: IngestionPayload): Promise<JobResponse> {

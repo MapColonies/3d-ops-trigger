@@ -30,6 +30,7 @@ const catalogStub = {
 const jobnikStub = {
   createIngestionJob: vi.fn().mockResolvedValue({ jobId: 'job-1', status: 'PENDING' }),
   createDeleteJob: vi.fn().mockResolvedValue({ jobId: 'del-1', status: 'PENDING' }),
+  hasInFlightIngestionJob: vi.fn().mockResolvedValue(false),
 } as unknown as JobnikClient;
 const providerStub = { fileExists: vi.fn().mockResolvedValue(true) };
 

@@ -1,4 +1,5 @@
 import { readPackageJsonSync } from '@map-colonies/read-pkg';
+import type { Job } from '@map-colonies/jobnik-sdk';
 
 export const SERVICE_NAME = readPackageJsonSync().name ?? 'unknown_service';
 export const DEFAULT_SERVER_PORT = 80;
@@ -19,6 +20,8 @@ export const STAGE_TYPES = {
   INGESTION_FINALIZER: 'ingestion-finalizer',
 } satisfies Record<string, string>;
 /* eslint-enable @typescript-eslint/naming-convention */
+
+export const IN_FLIGHT_JOB_STATUSES: readonly Job['status'][] = ['PENDING', 'IN_PROGRESS', 'PAUSED', 'CREATED'];
 
 /* eslint-disable @typescript-eslint/naming-convention */
 export const SERVICES = {

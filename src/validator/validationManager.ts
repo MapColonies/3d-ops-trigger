@@ -8,6 +8,7 @@ import { AppError } from '@common/appError';
 import { buildModelFilePath } from '@common/util';
 import { LookupTablesCall } from '../externalServices/lookupTables/lookupTablesCall';
 import { CatalogCall } from '../externalServices/catalog/catalogCall';
+import { JobnikClient } from '../externalServices/jobnik/jobnikClient';
 import type { Record3D } from '../externalServices/catalog/interfaces';
 import type { Provider } from '../providers/interfaces';
 import type { IngestionPayload } from '../record/models/recordManager';
@@ -20,6 +21,7 @@ export const ERROR_METADATA_MISSING_DATE = 'imagingTimeBeginUTC and imagingTimeE
 export const ERROR_METADATA_INVALID_DATE = 'imagingTimeBeginUTC and imagingTimeEndUTC must be valid dates';
 export const ERROR_METADATA_FOOTPRINT = 'Invalid footprint! Must be a GeoJSON Polygon or MultiPolygon with all-2D or all-3D coordinates';
 export const ERROR_METADATA_PRODUCT_NAME_UNIQUE = 'product name is not unique!';
+export const ERROR_PRODUCT_NAME_IN_FLIGHT = 'product name already has an in-flight ingestion job';
 export const ERROR_DELETE_RECORD_NOT_FOUND = "recordId doesn't match exactly one existing record";
 export const ERROR_DELETE_PRODUCT_TYPE = 'Cannot delete a record whose productType is "QuantizedMeshDTMBest"';
 export const ERROR_DELETE_STATUS = 'Cannot delete a record whose productStatus is not "UNPUBLISHED"';
@@ -33,6 +35,7 @@ export class ValidationManager {
     @inject(SERVICES.LOGGER) private readonly logger: Logger,
     @inject(LookupTablesCall) private readonly lookupTables: LookupTablesCall,
     @inject(CatalogCall) private readonly catalog: CatalogCall,
+    @inject(JobnikClient) private readonly jobnik: JobnikClient,
     @inject(SERVICES.PROVIDER) private readonly provider: Provider
   ) {
     this.logContext = {
@@ -61,6 +64,7 @@ export class ValidationManager {
 
     await this.validateClassification(parsed.data.classification);
     await this.validateProductNameUnique(parsed.data.productName);
+    await this.validateProductNameNotInFlight(parsed.data.productName);
     await this.validateFileExists(payload.modelPath, payload.tilesetFilename);
   }
 
@@ -101,6 +105,16 @@ export class ValidationManager {
 
     if (records.length > 0) {
       throw new AppError('badRequest', StatusCodes.BAD_REQUEST, ERROR_METADATA_PRODUCT_NAME_UNIQUE, true);
+    }
+  }
+
+  private async validateProductNameNotInFlight(productName: string): Promise<void> {
+    const logContext = { ...this.logContext, function: this.validateProductNameNotInFlight.name };
+    const inFlight = await this.jobnik.hasInFlightIngestionJob(productName);
+    this.logger.debug({ msg: 'in-flight duplicate validation', logContext, productName, inFlight });
+
+    if (inFlight) {
+      throw new AppError('conflict', StatusCodes.CONFLICT, ERROR_PRODUCT_NAME_IN_FLIGHT, true);
     }
   }
 

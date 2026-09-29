@@ -11,10 +11,12 @@ import {
   ERROR_DELETE_PRODUCT_TYPE,
   ERROR_DELETE_STATUS,
   ERROR_FILE_NOT_FOUND,
+  ERROR_PRODUCT_NAME_IN_FLIGHT,
 } from '@src/validator/validationManager';
 import { AppError } from '@src/common/appError';
 import type { LookupTablesCall } from '@src/externalServices/lookupTables/lookupTablesCall';
 import type { CatalogCall } from '@src/externalServices/catalog/catalogCall';
+import type { JobnikClient } from '@src/externalServices/jobnik/jobnikClient';
 import type { Provider } from '@src/providers/interfaces';
 import type { IngestionPayload } from '@src/record/models/recordManager';
 import { buildValidMetadata } from '@tests/helpers/metadata';
@@ -30,12 +32,14 @@ const ingest = (metadata: Record<string, unknown>): IngestionPayload => ({
 describe('ValidationManager', function () {
   let validator: ValidationManager;
   let catalogStub: CatalogCall;
+  let jobnikStub: JobnikClient;
   let providerStub: Provider;
 
   beforeEach(async function () {
     catalogStub = { findRecords: vi.fn().mockResolvedValue([]) } as unknown as CatalogCall;
+    jobnikStub = { hasInFlightIngestionJob: vi.fn().mockResolvedValue(false) } as unknown as JobnikClient;
     providerStub = { fileExists: vi.fn().mockResolvedValue(true) };
-    validator = new ValidationManager(await jsLogger({ enabled: false }), lookupStub, catalogStub, providerStub);
+    validator = new ValidationManager(await jsLogger({ enabled: false }), lookupStub, catalogStub, jobnikStub, providerStub);
   });
 
   it('should pass a fully valid ingestion payload', async function () {
@@ -98,6 +102,21 @@ describe('ValidationManager', function () {
     (catalogStub.findRecords as ReturnType<typeof vi.fn>).mockResolvedValueOnce([{ id: 'existing', productName: 'afula' }]);
 
     await expect(validator.validateIngestion(ingest(buildValidMetadata()))).rejects.toThrow(AppError);
+  });
+
+  it('should throw 409 when the product name has an in-flight ingestion job', async function () {
+    (jobnikStub.hasInFlightIngestionJob as ReturnType<typeof vi.fn>).mockResolvedValueOnce(true);
+
+    let thrown: unknown;
+    try {
+      await validator.validateIngestion(ingest(buildValidMetadata()));
+    } catch (err) {
+      thrown = err;
+    }
+
+    expect(thrown).toBeInstanceOf(AppError);
+    expect((thrown as AppError).status).toBe(StatusCodes.CONFLICT);
+    expect((thrown as AppError).message).toBe(ERROR_PRODUCT_NAME_IN_FLIGHT);
   });
 
   it('should throw 400 when the model files do not exist', async function () {
