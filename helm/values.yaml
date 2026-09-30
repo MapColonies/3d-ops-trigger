@@ -94,6 +94,9 @@ jobManager:
     jobType: ''
     taskType: ''
 
+validation:
+  percentageLimit: 10
+
 provider: 'NFS'
 NFS:
   pvPath: ''

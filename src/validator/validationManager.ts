@@ -1,17 +1,23 @@
 import type { Logger } from '@map-colonies/js-logger';
 import { StatusCodes } from 'http-status-codes';
 import { inject, injectable } from 'tsyringe';
-import { new3DLayerMetadataSchema, geometrySchema } from '@map-colonies/3d-shared';
+import { new3DLayerMetadataSchema, geometrySchema, calculatePolygonFromTileset, type TileSetJson } from '@map-colonies/3d-shared';
+import { area, feature, featureCollection, intersect, union } from '@turf/turf';
+import type { Feature, MultiPolygon, Polygon } from 'geojson';
 import { SERVICES } from '@common/constants';
-import type { LogContext } from '@common/interfaces';
+import type { LogContext, ValidationResponse } from '@common/interfaces';
 import { AppError } from '@common/appError';
 import { buildModelFilePath } from '@common/util';
+import type { ConfigType } from '@common/config';
 import { LookupTablesCall } from '../externalServices/lookupTables/lookupTablesCall';
 import { CatalogCall } from '../externalServices/catalog/catalogCall';
 import { JobnikClient } from '../externalServices/jobnik/jobnikClient';
+import { TilesetReader } from '../tileset/tilesetReader';
 import type { Record3D } from '../externalServices/catalog/interfaces';
 import type { Provider } from '../providers/interfaces';
 import type { IngestionPayload } from '../record/models/recordManager';
+
+const FULL_COVERAGE_PERCENT = 100;
 
 const BLOCKED_DELETE_PRODUCT_TYPE = 'QuantizedMeshDTMBest';
 const RECORD_STATUS_UNPUBLISHED = 'UNPUBLISHED';
@@ -26,18 +32,25 @@ export const ERROR_DELETE_RECORD_NOT_FOUND = "recordId doesn't match exactly one
 export const ERROR_DELETE_PRODUCT_TYPE = 'Cannot delete a record whose productType is "QuantizedMeshDTMBest"';
 export const ERROR_DELETE_STATUS = 'Cannot delete a record whose productStatus is not "UNPUBLISHED"';
 export const ERROR_FILE_NOT_FOUND = 'The model files do not exist in the agreed storage';
+export const ERROR_TILESET_INVALID = 'The tileset file is not a valid 3DTiles tileset';
+export const ERROR_FOOTPRINT_FAR_FROM_MODEL = "Wrong footprint! footprint's coordinates is not even close to the model!";
+export const ERROR_INTERSECTION_FAILED = 'An error caused during the validation of the intersection';
 
 @injectable()
 export class ValidationManager {
   private readonly logContext: LogContext;
+  private readonly percentageLimit: number;
 
   public constructor(
+    @inject(SERVICES.CONFIG) private readonly config: ConfigType,
     @inject(SERVICES.LOGGER) private readonly logger: Logger,
     @inject(LookupTablesCall) private readonly lookupTables: LookupTablesCall,
     @inject(CatalogCall) private readonly catalog: CatalogCall,
     @inject(JobnikClient) private readonly jobnik: JobnikClient,
+    @inject(TilesetReader) private readonly tilesetReader: TilesetReader,
     @inject(SERVICES.PROVIDER) private readonly provider: Provider
   ) {
+    this.percentageLimit = this.config.get('validation.percentageLimit');
     this.logContext = {
       fileName: __filename,
       class: ValidationManager.name,
@@ -66,6 +79,7 @@ export class ValidationManager {
     await this.validateProductNameUnique(parsed.data.productName);
     await this.validateProductNameNotInFlight(parsed.data.productName);
     await this.validateFileExists(payload.modelPath, payload.tilesetFilename);
+    await this.validateTileset(payload, footprintResult.data);
   }
 
   public async validateDelete(recordId: string): Promise<Record3D> {
@@ -81,6 +95,7 @@ export class ValidationManager {
     if (record.productType === BLOCKED_DELETE_PRODUCT_TYPE) {
       throw new AppError('badRequest', StatusCodes.BAD_REQUEST, ERROR_DELETE_PRODUCT_TYPE, true);
     }
+
     if (record.productStatus !== RECORD_STATUS_UNPUBLISHED) {
       throw new AppError('badRequest', StatusCodes.BAD_REQUEST, ERROR_DELETE_STATUS, true);
     }
@@ -93,6 +108,7 @@ export class ValidationManager {
     const path = buildModelFilePath(modelPath, tilesetFilename);
     const exists = await this.provider.fileExists(path);
     this.logger.debug({ msg: 'file existence validation', logContext, path, exists });
+
     if (!exists) {
       throw new AppError('badRequest', StatusCodes.BAD_REQUEST, ERROR_FILE_NOT_FOUND, true);
     }
@@ -116,6 +132,72 @@ export class ValidationManager {
     if (inFlight) {
       throw new AppError('conflict', StatusCodes.CONFLICT, ERROR_PRODUCT_NAME_IN_FLIGHT, true);
     }
+  }
+
+  private async validateTileset(payload: IngestionPayload, footprint: Polygon | MultiPolygon): Promise<void> {
+    const content = await this.tilesetReader.readTilesetJson(payload.modelPath, payload.tilesetFilename);
+
+    const { modelPolygon, response: polygonResponse } = this.getTilesetModelPolygon(content);
+    if (!polygonResponse.isValid || modelPolygon === undefined) {
+      this.rejectValidation(polygonResponse);
+    }
+
+    const intersectionResponse = this.isFootprintAndModelIntersects(footprint, modelPolygon);
+    if (!intersectionResponse.isValid) {
+      this.rejectValidation(intersectionResponse);
+    }
+  }
+
+  private getTilesetModelPolygon(content: string): { modelPolygon?: Polygon; response: ValidationResponse } {
+    const logContext = { ...this.logContext, function: this.getTilesetModelPolygon.name };
+    try {
+      const tilesetJson = JSON.parse(content) as TileSetJson;
+      const modelPolygon = calculatePolygonFromTileset(tilesetJson);
+      this.logger.debug({ msg: 'extracted tileset model polygon', logContext, modelPolygon });
+
+      return { modelPolygon, response: { isValid: true } };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : ERROR_TILESET_INVALID;
+      this.logger.error({ msg: 'tileset polygon extraction failed', logContext, err });
+      return { response: { isValid: false, message } };
+    }
+  }
+
+  private isFootprintAndModelIntersects(footprint: Polygon | MultiPolygon, modelPolygon: Polygon): ValidationResponse {
+    const logContext = { ...this.logContext, function: this.isFootprintAndModelIntersects.name };
+    try {
+      const footprintFeature = feature(footprint);
+      const modelFeature: Feature<Polygon> = feature(modelPolygon);
+
+      const intersection = intersect(featureCollection([footprintFeature, modelFeature]));
+      if (intersection === null) {
+        return { isValid: false, message: ERROR_FOOTPRINT_FAR_FROM_MODEL };
+      }
+
+      const combined = union(featureCollection([footprintFeature, modelFeature]));
+      const combinedArea = combined === null ? 0 : area(combined);
+      const coverage = combinedArea === 0 ? 0 : (FULL_COVERAGE_PERCENT * area(footprintFeature)) / combinedArea;
+      this.logger.debug({ msg: 'calculated footprint coverage of the model', logContext, coverage, percentageLimit: this.percentageLimit });
+
+      if (coverage < this.percentageLimit) {
+        return {
+          isValid: false,
+          message: `The footprint intersectection with the model doesn't reach minimum required threshhold, the coverage is: ${coverage}% when the minimum coverage is ${this.percentageLimit}%`,
+        };
+      }
+      return { isValid: true };
+    } catch (err) {
+      this.logger.error({ msg: ERROR_INTERSECTION_FAILED, logContext, err });
+      return { isValid: false, message: ERROR_INTERSECTION_FAILED };
+    }
+  }
+
+  private rejectValidation(response: ValidationResponse): never {
+    const logContext = { ...this.logContext, function: this.rejectValidation.name };
+    const message = response.message ?? ERROR_TILESET_INVALID;
+    this.logger.warn({ msg: 'ingestion validation failed', logContext, isValid: response.isValid, message });
+
+    throw new AppError('badRequest', StatusCodes.BAD_REQUEST, message, true);
   }
 
   private validateDates(start: unknown, end: unknown): void {

@@ -24,6 +24,10 @@ interface JobManagerConfig {
   };
 }
 
+interface ValidationConfig {
+  percentageLimit: number;
+}
+
 interface NFSConfig {
   pvPath: string;
 }
@@ -44,6 +48,7 @@ type ProviderSource = 'NFS' | 'S3';
 type OpsTriggerConfigType = commonBoilerplateV3Type & {
   externalServices: ExternalServicesConfig;
   jobManager: JobManagerConfig;
+  validation: ValidationConfig;
   provider: ProviderSource;
   // eslint-disable-next-line @typescript-eslint/naming-convention
   NFS: NFSConfig;
@@ -60,9 +65,16 @@ const opsTriggerConfigSchema = {
     { $ref: commonBoilerplateV3.$id },
     {
       type: 'object',
-      required: ['externalServices', 'jobManager', 'provider'],
+      required: ['externalServices', 'jobManager', 'validation', 'provider'],
       properties: {
         provider: { type: 'string', enum: ['NFS', 'S3'] },
+        validation: {
+          type: 'object',
+          required: ['percentageLimit'],
+          properties: {
+            percentageLimit: { type: 'number' },
+          },
+        },
         // eslint-disable-next-line @typescript-eslint/naming-convention
         NFS: {
           type: 'object',
@@ -145,4 +157,4 @@ function getConfig(): ConfigType {
 }
 
 export { getConfig, initConfig };
-export type { ConfigType, LookupTablesConfig, ExternalServicesConfig, JobManagerConfig, NFSConfig, S3Config, ProviderSource };
+export type { ConfigType, LookupTablesConfig, ExternalServicesConfig, JobManagerConfig, ValidationConfig, NFSConfig, S3Config, ProviderSource };
