@@ -8,3 +8,8 @@ export interface LogContext {
   class: string;
   function?: string;
 }
+
+export interface ValidationResponse {
+  isValid: boolean;
+  message?: string;
+}

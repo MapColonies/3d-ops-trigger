@@ -5,7 +5,7 @@ import { new3DLayerMetadataSchema, geometrySchema, calculatePolygonFromTileset, 
 import { area, feature, featureCollection, intersect, union } from '@turf/turf';
 import type { Feature, MultiPolygon, Polygon } from 'geojson';
 import { SERVICES } from '@common/constants';
-import type { LogContext } from '@common/interfaces';
+import type { LogContext, ValidationResponse } from '@common/interfaces';
 import { AppError } from '@common/appError';
 import { buildModelFilePath } from '@common/util';
 import type { ConfigType } from '@common/config';
@@ -33,8 +33,8 @@ export const ERROR_DELETE_PRODUCT_TYPE = 'Cannot delete a record whose productTy
 export const ERROR_DELETE_STATUS = 'Cannot delete a record whose productStatus is not "UNPUBLISHED"';
 export const ERROR_FILE_NOT_FOUND = 'The model files do not exist in the agreed storage';
 export const ERROR_TILESET_INVALID = 'The tileset file is not a valid 3DTiles tileset';
-export const ERROR_FOOTPRINT_FAR_FROM_MODEL = 'Invalid footprint! The footprint does not intersect the tileset model';
-export const ERROR_FOOTPRINT_COVERAGE = 'The footprint coverage of the tileset model is below the required threshold';
+export const ERROR_FOOTPRINT_FAR_FROM_MODEL = "Wrong footprint! footprint's coordinates is not even close to the model!";
+export const ERROR_INTERSECTION_FAILED = 'An error caused during the validation of the intersection';
 
 @injectable()
 export class ValidationManager {
@@ -95,6 +95,7 @@ export class ValidationManager {
     if (record.productType === BLOCKED_DELETE_PRODUCT_TYPE) {
       throw new AppError('badRequest', StatusCodes.BAD_REQUEST, ERROR_DELETE_PRODUCT_TYPE, true);
     }
+
     if (record.productStatus !== RECORD_STATUS_UNPUBLISHED) {
       throw new AppError('badRequest', StatusCodes.BAD_REQUEST, ERROR_DELETE_STATUS, true);
     }
@@ -107,6 +108,7 @@ export class ValidationManager {
     const path = buildModelFilePath(modelPath, tilesetFilename);
     const exists = await this.provider.fileExists(path);
     this.logger.debug({ msg: 'file existence validation', logContext, path, exists });
+
     if (!exists) {
       throw new AppError('badRequest', StatusCodes.BAD_REQUEST, ERROR_FILE_NOT_FOUND, true);
     }
@@ -133,45 +135,69 @@ export class ValidationManager {
   }
 
   private async validateTileset(payload: IngestionPayload, footprint: Polygon | MultiPolygon): Promise<void> {
-    const logContext = { ...this.logContext, function: this.validateTileset.name };
     const content = await this.tilesetReader.readTilesetJson(payload.modelPath, payload.tilesetFilename);
 
-    let modelPolygon: Polygon;
-    try {
-      const tilesetJson = JSON.parse(content) as TileSetJson;
-      modelPolygon = calculatePolygonFromTileset(tilesetJson);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : ERROR_TILESET_INVALID;
-      this.logger.error({ msg: 'tileset polygon extraction failed', logContext, modelPath: payload.modelPath, err });
-      throw new AppError('badRequest', StatusCodes.BAD_REQUEST, message, true);
+    const { modelPolygon, response: polygonResponse } = this.getTilesetModelPolygon(content);
+    if (!polygonResponse.isValid || modelPolygon === undefined) {
+      this.rejectValidation(polygonResponse);
     }
 
-    this.validateFootprintCoverage(footprint, modelPolygon);
+    const intersectionResponse = this.isFootprintAndModelIntersects(footprint, modelPolygon);
+    if (!intersectionResponse.isValid) {
+      this.rejectValidation(intersectionResponse);
+    }
   }
 
-  private validateFootprintCoverage(footprint: Polygon | MultiPolygon, modelPolygon: Polygon): void {
-    const logContext = { ...this.logContext, function: this.validateFootprintCoverage.name };
-    const footprintFeature = feature(footprint);
-    const modelFeature: Feature<Polygon> = feature(modelPolygon);
+  private getTilesetModelPolygon(content: string): { modelPolygon?: Polygon; response: ValidationResponse } {
+    const logContext = { ...this.logContext, function: this.getTilesetModelPolygon.name };
+    try {
+      const tilesetJson = JSON.parse(content) as TileSetJson;
+      const modelPolygon = calculatePolygonFromTileset(tilesetJson);
+      this.logger.debug({ msg: 'extracted tileset model polygon', logContext, modelPolygon });
 
-    const intersection = intersect(featureCollection([footprintFeature, modelFeature]));
-    if (intersection === null) {
-      throw new AppError('badRequest', StatusCodes.BAD_REQUEST, ERROR_FOOTPRINT_FAR_FROM_MODEL, true);
+      return { modelPolygon, response: { isValid: true } };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : ERROR_TILESET_INVALID;
+      this.logger.error({ msg: 'tileset polygon extraction failed', logContext, err });
+      return { response: { isValid: false, message } };
     }
+  }
 
-    const combined = union(featureCollection([footprintFeature, modelFeature]));
-    const combinedArea = combined === null ? 0 : area(combined);
-    const coverage = combinedArea === 0 ? 0 : (FULL_COVERAGE_PERCENT * area(footprintFeature)) / combinedArea;
-    this.logger.debug({ msg: 'footprint coverage validation', logContext, coverage, percentageLimit: this.percentageLimit });
+  private isFootprintAndModelIntersects(footprint: Polygon | MultiPolygon, modelPolygon: Polygon): ValidationResponse {
+    const logContext = { ...this.logContext, function: this.isFootprintAndModelIntersects.name };
+    try {
+      const footprintFeature = feature(footprint);
+      const modelFeature: Feature<Polygon> = feature(modelPolygon);
 
-    if (coverage < this.percentageLimit) {
-      throw new AppError(
-        'badRequest',
-        StatusCodes.BAD_REQUEST,
-        `${ERROR_FOOTPRINT_COVERAGE}. coverage: ${coverage}%, minimum: ${this.percentageLimit}%`,
-        true
-      );
+      const intersection = intersect(featureCollection([footprintFeature, modelFeature]));
+      if (intersection === null) {
+        return { isValid: false, message: ERROR_FOOTPRINT_FAR_FROM_MODEL };
+      }
+
+      const combined = union(featureCollection([footprintFeature, modelFeature]));
+      const combinedArea = combined === null ? 0 : area(combined);
+      const coverage = combinedArea === 0 ? 0 : (FULL_COVERAGE_PERCENT * area(footprintFeature)) / combinedArea;
+      this.logger.debug({ msg: 'calculated footprint coverage of the model', logContext, coverage, percentageLimit: this.percentageLimit });
+
+      if (coverage < this.percentageLimit) {
+        return {
+          isValid: false,
+          message: `The footprint intersectection with the model doesn't reach minimum required threshhold, the coverage is: ${coverage}% when the minimum coverage is ${this.percentageLimit}%`,
+        };
+      }
+      return { isValid: true };
+    } catch (err) {
+      this.logger.error({ msg: ERROR_INTERSECTION_FAILED, logContext, err });
+      return { isValid: false, message: ERROR_INTERSECTION_FAILED };
     }
+  }
+
+  private rejectValidation(response: ValidationResponse): never {
+    const logContext = { ...this.logContext, function: this.rejectValidation.name };
+    const message = response.message ?? ERROR_TILESET_INVALID;
+    this.logger.warn({ msg: 'ingestion validation failed', logContext, isValid: response.isValid, message });
+
+    throw new AppError('badRequest', StatusCodes.BAD_REQUEST, message, true);
   }
 
   private validateDates(start: unknown, end: unknown): void {

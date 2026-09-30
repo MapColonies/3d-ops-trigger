@@ -162,6 +162,33 @@ describe('ValidationManager', function () {
     await expect(validator.validateIngestion(ingest(metadata))).rejects.toThrow(ERROR_FOOTPRINT_FAR_FROM_MODEL);
   });
 
+  it('should throw 400 when the footprint coverage of the model is below the threshold', async function () {
+    const metadata = buildValidMetadata();
+    metadata.footprint = {
+      type: 'Polygon',
+      coordinates: [
+        [
+          [35.17, 32.9],
+          [35.172, 32.9],
+          [35.172, 32.902],
+          [35.17, 32.902],
+          [35.17, 32.9],
+        ],
+      ],
+    };
+
+    let thrown: unknown;
+    try {
+      await validator.validateIngestion(ingest(metadata));
+    } catch (err) {
+      thrown = err;
+    }
+
+    expect(thrown).toBeInstanceOf(AppError);
+    expect((thrown as AppError).status).toBe(StatusCodes.BAD_REQUEST);
+    expect((thrown as AppError).message).toMatch(/minimum required threshhold/);
+  });
+
   it('should throw 400 when the tileset bounding volume is an unsupported box', async function () {
     (tilesetReaderStub.readTilesetJson as ReturnType<typeof vi.fn>).mockResolvedValueOnce(boxTilesetJson);
 
