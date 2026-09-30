@@ -10,8 +10,10 @@ import { collectMetricsExpressMiddleware } from '@map-colonies/prometheus';
 import { Registry } from 'prom-client';
 import type { ConfigType } from '@common/config';
 import { SERVICES } from '@common/constants';
-import { RECORD_ROUTER_SYMBOL } from './record/routes/recordRouter';
-import { JOB_ROUTER_SYMBOL } from './job/routes/jobRouter';
+import { JOB_OPERATIONS_ROUTER_SYMBOL } from './jobOperations/routes/jobOperationsRouter';
+import { JOB_STATUS_ROUTER_SYMBOL } from './jobStatus/routes/jobStatusRouter';
+import { MODELS_ROUTER_SYMBOL } from './models/routes/modelsRouter';
+import { METADATA_ROUTER_SYMBOL } from './metadata/routes/metadataRouter';
 
 @injectable()
 export class ServerBuilder {
@@ -21,8 +23,10 @@ export class ServerBuilder {
     @inject(SERVICES.CONFIG) private readonly config: ConfigType,
     @inject(SERVICES.LOGGER) private readonly logger: Logger,
     @inject(SERVICES.METRICS) private readonly metricsRegistry: Registry,
-    @inject(RECORD_ROUTER_SYMBOL) private readonly recordRouter: Router,
-    @inject(JOB_ROUTER_SYMBOL) private readonly jobRouter: Router
+    @inject(JOB_OPERATIONS_ROUTER_SYMBOL) private readonly jobOperationsRouter: Router,
+    @inject(JOB_STATUS_ROUTER_SYMBOL) private readonly jobStatusRouter: Router,
+    @inject(MODELS_ROUTER_SYMBOL) private readonly modelsRouter: Router,
+    @inject(METADATA_ROUTER_SYMBOL) private readonly metadataRouter: Router
   ) {
     this.serverInstance = express();
   }
@@ -45,8 +49,10 @@ export class ServerBuilder {
   }
 
   private buildRoutes(): void {
-    this.serverInstance.use('/record', this.recordRouter);
-    this.serverInstance.use('/jobs', this.jobRouter);
+    this.serverInstance.use('/jobOperations', this.jobOperationsRouter);
+    this.serverInstance.use('/jobStatus', this.jobStatusRouter);
+    this.serverInstance.use('/models', this.modelsRouter);
+    this.serverInstance.use('/metadata', this.metadataRouter);
     this.buildDocsRoutes();
   }
 

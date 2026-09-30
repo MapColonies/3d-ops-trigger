@@ -4,10 +4,10 @@ import { injectable, inject } from 'tsyringe';
 import type { TypedRequestHandlers } from '@openapi';
 import { SERVICES } from '@common/constants';
 import type { LogContext } from '@common/interfaces';
-import { JobManager } from '../models/jobManager';
+import { JobManager } from '../../job/models/jobManager';
 
 @injectable()
-export class JobController {
+export class JobStatusController {
   private readonly logContext: LogContext;
 
   public constructor(
@@ -16,7 +16,7 @@ export class JobController {
   ) {
     this.logContext = {
       fileName: __filename,
-      class: JobController.name,
+      class: JobStatusController.name,
     };
   }
 

@@ -29,7 +29,6 @@ const deletableRecord = {
 };
 
 const lookupStub = { getClassifications: vi.fn().mockResolvedValue(['abc123']) } as unknown as LookupTablesCall;
-// findRecords by id (delete) → an existing deletable record; by productName (uniqueness) → none
 const catalogStub = {
   findRecords: vi.fn().mockImplementation((payload: { id?: string }) => (payload.id !== undefined ? [deletableRecord] : [])),
   getRecord: vi.fn().mockResolvedValue(deletableRecord),
@@ -54,7 +53,7 @@ const validIngestionPayload = {
   metadata: validMetadata,
 };
 
-describe('record', function () {
+describe('3d-ops-trigger', function () {
   let requestSender: RequestSender<paths, operations>;
 
   beforeAll(async function () {
@@ -78,23 +77,23 @@ describe('record', function () {
     requestSender = await createRequestSender<paths, operations>('openapi3.yaml', app);
   });
 
-  describe('POST /record', function () {
+  describe('POST /jobOperations/ingestion', function () {
     it('should return 201 and a job response for a valid ingestion request', async function () {
-      const response = await requestSender.createRecord({ requestBody: validIngestionPayload });
+      const response = await requestSender.createIngestion({ requestBody: validIngestionPayload });
 
       expect(response).toSatisfyApiSpec();
       expect(response.status).toBe(httpStatusCodes.CREATED);
 
-      const body = response.body as paths['/record']['post']['responses']['201']['content']['application/json'];
+      const body = response.body as paths['/jobOperations/ingestion']['post']['responses']['201']['content']['application/json'];
 
       expect(body.jobId).toBeTypeOf('string');
       expect(body.status).toBeTypeOf('string');
     });
 
     it('should return 400 when a required field is missing', async function () {
-      const response = await requestSender.createRecord({
+      const response = await requestSender.createIngestion({
         // @ts-expect-error intentionally invalid: missing tilesetFilename and metadata
-        requestBody: { modelPath: '/shared/models/afula' },
+        requestBody: { modelPath: '/app/models/afula' },
       });
 
       expect(response).toSatisfyApiSpec();
@@ -102,7 +101,7 @@ describe('record', function () {
     });
 
     it('should return 400 when metadata fails business validation', async function () {
-      const response = await requestSender.createRecord({
+      const response = await requestSender.createIngestion({
         requestBody: { ...validIngestionPayload, metadata: { ...validMetadata, productType: 'NOT_A_3D_TYPE' } },
       });
 
@@ -111,65 +110,36 @@ describe('record', function () {
     });
   });
 
-  describe('DELETE /record/{id}', function () {
+  describe('POST /jobOperations/delete', function () {
     it('should return 200 and a job response', async function () {
-      const response = await requestSender.deleteRecord({ pathParams: { id: 'rec-1' } });
+      const response = await requestSender.createDelete({ requestBody: { id: 'rec-1' } });
 
       expect(response).toSatisfyApiSpec();
       expect(response.status).toBe(httpStatusCodes.OK);
 
-      const body = response.body as paths['/record/{id}']['delete']['responses']['200']['content']['application/json'];
+      const body = response.body as paths['/jobOperations/delete']['post']['responses']['200']['content']['application/json'];
 
       expect(body.jobId).toBeTypeOf('string');
     });
   });
 
-  describe('GET /record/canDelete/{id}', function () {
-    it('should return 200 with isValid true for a deletable record', async function () {
-      const response = await requestSender.canDeleteRecord({ pathParams: { id: 'rec-1' } });
+  describe('GET /jobStatus/{jobId}', function () {
+    it('should return 200 with the job status and percentage', async function () {
+      const response = await requestSender.getJobStatus({ pathParams: { jobId: 'job-1' } });
 
       expect(response).toSatisfyApiSpec();
       expect(response.status).toBe(httpStatusCodes.OK);
 
-      const body = response.body;
+      const body = response.body as paths['/jobStatus/{jobId}']['get']['responses']['200']['content']['application/json'];
 
-      expect(body.isValid).toBe(true);
+      expect(body.status).toBeTypeOf('string');
+      expect(body.percentage).toBe(42);
     });
   });
 
-  describe('PATCH /record/{id}', function () {
-    it('should return 200 and an ack for a metadata update', async function () {
-      const response = await requestSender.updateRecord({ pathParams: { id: 'rec-1' }, requestBody: { description: 'updated' } });
-
-      expect(response).toSatisfyApiSpec();
-      expect(response.status).toBe(httpStatusCodes.OK);
-      expect(response.body.message).toBeTypeOf('string');
-    });
-  });
-
-  describe('PATCH /record/status/{id}', function () {
-    it('should return 200 and an ack for a valid status change', async function () {
-      const response = await requestSender.updateRecordStatus({ pathParams: { id: 'rec-1' }, requestBody: { status: 'PUBLISHED' } });
-
-      expect(response).toSatisfyApiSpec();
-      expect(response.status).toBe(httpStatusCodes.OK);
-    });
-
-    it('should return 400 for an invalid status value', async function () {
-      const response = await requestSender.updateRecordStatus({
-        pathParams: { id: 'rec-1' },
-        // @ts-expect-error intentionally invalid status enum value
-        requestBody: { status: 'NOT_A_STATUS' },
-      });
-
-      expect(response).toSatisfyApiSpec();
-      expect(response.status).toBe(httpStatusCodes.BAD_REQUEST);
-    });
-  });
-
-  describe('POST /record/validate', function () {
+  describe('POST /models/validate', function () {
     it('should return 200 with isValid true for a valid request without creating a job', async function () {
-      const response = await requestSender.validateRecord({ requestBody: validIngestionPayload });
+      const response = await requestSender.validateModel({ requestBody: validIngestionPayload });
 
       expect(response).toSatisfyApiSpec();
       expect(response.status).toBe(httpStatusCodes.OK);
@@ -180,7 +150,7 @@ describe('record', function () {
     });
 
     it('should return 200 with isValid false and a message for an invalid request', async function () {
-      const response = await requestSender.validateRecord({
+      const response = await requestSender.validateModel({
         requestBody: { ...validIngestionPayload, metadata: { ...validMetadata, productType: 'NOT_A_3D_TYPE' } },
       });
 
@@ -194,17 +164,46 @@ describe('record', function () {
     });
   });
 
-  describe('GET /jobs/{jobId}', function () {
-    it('should return 200 with the job status and percentage', async function () {
-      const response = await requestSender.getJobStatus({ pathParams: { jobId: 'job-1' } });
+  describe('GET /models/canDelete/{recordId}', function () {
+    it('should return 200 with isValid true for a deletable record', async function () {
+      const response = await requestSender.canDeleteModel({ pathParams: { recordId: 'rec-1' } });
 
       expect(response).toSatisfyApiSpec();
       expect(response.status).toBe(httpStatusCodes.OK);
 
-      const body = response.body as paths['/jobs/{jobId}']['get']['responses']['200']['content']['application/json'];
+      const body = response.body;
 
-      expect(body.status).toBeTypeOf('string');
-      expect(body.percentage).toBe(42);
+      expect(body.isValid).toBe(true);
+    });
+  });
+
+  describe('PATCH /metadata/{identifier}', function () {
+    it('should return 200 and an ack for a metadata update', async function () {
+      const response = await requestSender.updateMetadata({ pathParams: { identifier: 'rec-1' }, requestBody: { description: 'updated' } });
+
+      expect(response).toSatisfyApiSpec();
+      expect(response.status).toBe(httpStatusCodes.OK);
+      expect(response.body.message).toBeTypeOf('string');
+    });
+  });
+
+  describe('PATCH /metadata/status/{identifier}', function () {
+    it('should return 200 and an ack for a valid status change', async function () {
+      const response = await requestSender.updateMetadataStatus({ pathParams: { identifier: 'rec-1' }, requestBody: { status: 'PUBLISHED' } });
+
+      expect(response).toSatisfyApiSpec();
+      expect(response.status).toBe(httpStatusCodes.OK);
+    });
+
+    it('should return 400 for an invalid status value', async function () {
+      const response = await requestSender.updateMetadataStatus({
+        pathParams: { identifier: 'rec-1' },
+        // @ts-expect-error intentionally invalid status enum value
+        requestBody: { status: 'NOT_A_STATUS' },
+      });
+
+      expect(response).toSatisfyApiSpec();
+      expect(response.status).toBe(httpStatusCodes.BAD_REQUEST);
     });
   });
 });
