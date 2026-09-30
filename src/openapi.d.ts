@@ -44,6 +44,26 @@ export type paths = {
     patch?: never;
     trace?: never;
   };
+  '/record/canDelete/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Validate whether a record can be deleted
+     * @description Runs the delete validation and returns the result without creating a job.
+     */
+    get: operations['canDeleteRecord'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/record/{id}': {
     parameters: {
       query?: never;
@@ -198,6 +218,29 @@ export interface operations {
         'application/json': components['schemas']['ingestionPayload'];
       };
     };
+    responses: {
+      /** @description Validation result */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['validationResultResponse'];
+        };
+      };
+    };
+  };
+  canDeleteRecord: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The record identifier */
+        id: components['parameters']['recordId'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
     responses: {
       /** @description Validation result */
       200: {

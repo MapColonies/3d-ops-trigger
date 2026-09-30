@@ -51,6 +51,18 @@ export class RecordController {
     }
   };
 
+  public canDeleteRecord: TypedRequestHandlers['canDeleteRecord'] = async (req, res, next) => {
+    const logContext = { ...this.logContext, function: this.canDeleteRecord.name };
+    const { id } = req.params;
+    try {
+      const result = await this.manager.canDelete(id);
+      return res.status(StatusCodes.OK).json(result);
+    } catch (err) {
+      this.logger.error({ msg: 'failed to validate record deletability', logContext, err, recordId: id });
+      return next(err);
+    }
+  };
+
   public deleteRecord: TypedRequestHandlers['deleteRecord'] = async (req, res, next) => {
     const logContext = { ...this.logContext, function: this.deleteRecord.name };
     const { id } = req.params;

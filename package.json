@@ -14,7 +14,7 @@
     "prelint:fix": "npm run format:fix",
     "prelint": "npm run format",
     "lint:openapi": "redocly lint openapi3.yaml",
-    "openapi:bundle": "redocly bundle openapi3.yaml -o bundledApi.yaml",
+    "bundleOpenApi": "redocly bundle openapi3.yaml -o bundledApi.yaml",
     "lint": "eslint .",
     "lint:fix": "eslint --fix .",
     "prebuild": "npm run clean && npm run generate:openapi-types",

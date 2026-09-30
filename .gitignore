@@ -113,4 +113,3 @@ jest_html_reporters.html
 reports
 
 config/local*.json
-bundledApi.yaml

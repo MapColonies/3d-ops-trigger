@@ -62,6 +62,20 @@ export class RecordManager {
     }
   }
 
+  public async canDelete(id: string): Promise<ValidationResultResponse> {
+    const logContext = { ...this.logContext, function: this.canDelete.name };
+    this.logger.info({ msg: 'validating record deletability', logContext, recordId: id });
+    try {
+      await this.validator.validateDelete(id);
+      return { isValid: true };
+    } catch (err) {
+      if (err instanceof AppError) {
+        return { isValid: false, message: err.message };
+      }
+      throw err;
+    }
+  }
+
   public async deleteRecord(id: string): Promise<JobResponse> {
     const logContext = { ...this.logContext, function: this.deleteRecord.name };
     this.logger.info({ msg: 'creating delete job', logContext, recordId: id });

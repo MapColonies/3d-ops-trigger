@@ -124,6 +124,19 @@ describe('record', function () {
     });
   });
 
+  describe('GET /record/canDelete/{id}', function () {
+    it('should return 200 with isValid true for a deletable record', async function () {
+      const response = await requestSender.canDeleteRecord({ pathParams: { id: 'rec-1' } });
+
+      expect(response).toSatisfyApiSpec();
+      expect(response.status).toBe(httpStatusCodes.OK);
+
+      const body = response.body;
+
+      expect(body.isValid).toBe(true);
+    });
+  });
+
   describe('PATCH /record/{id}', function () {
     it('should return 200 and an ack for a metadata update', async function () {
       const response = await requestSender.updateRecord({ pathParams: { id: 'rec-1' }, requestBody: { description: 'updated' } });
