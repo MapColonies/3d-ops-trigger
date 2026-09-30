@@ -1,5 +1,8 @@
+import { randomUUID } from 'node:crypto';
 import type { Logger } from '@map-colonies/js-logger';
 import { inject, injectable } from 'tsyringe';
+import { trace } from '@opentelemetry/api';
+import { StatusCodes } from 'http-status-codes';
 import type { Polygon } from 'geojson';
 import type { components } from '@openapi';
 import { SERVICES } from '@common/constants';
@@ -37,15 +40,26 @@ export class RecordManager {
 
   public async createIngestion(payload: IngestionPayload): Promise<JobResponse> {
     const logContext = { ...this.logContext, function: this.createIngestion.name };
-    this.logger.info({ msg: 'creating ingestion job', logContext, modelPath: payload.modelPath, tilesetFilename: payload.tilesetFilename });
-    await this.validator.validateIngestion(payload);
+    const modelId = randomUUID();
+    this.logger.info({ msg: 'creating ingestion job', logContext, modelId, modelPath: payload.modelPath, tilesetFilename: payload.tilesetFilename });
+    trace.getActiveSpan()?.setAttribute('catalogId', modelId);
 
-    const metadata = payload.metadata as Record<string, unknown>;
-    if (metadata.footprint !== undefined) {
-      metadata.footprint = convertPolygonTo2DPolygon(metadata.footprint as Polygon);
+    try {
+      await this.validator.validateIngestion(payload);
+
+      const metadata = payload.metadata as Record<string, unknown>;
+      if (metadata.footprint !== undefined) {
+        metadata.footprint = convertPolygonTo2DPolygon(metadata.footprint as Polygon);
+      }
+
+      return await this.jobnik.createIngestionJob(payload, modelId);
+    } catch (err) {
+      if (err instanceof AppError) {
+        throw err;
+      }
+      this.logger.error({ msg: 'unexpected error while creating ingestion job', logContext, modelId, err });
+      throw new AppError('error', StatusCodes.INTERNAL_SERVER_ERROR, String(err), true);
     }
-
-    return this.jobnik.createIngestionJob(payload);
   }
 
   public async validateIngestion(payload: IngestionPayload): Promise<ValidationResultResponse> {

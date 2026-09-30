@@ -89,13 +89,13 @@ export class JobnikClient {
     return { status: data.status, percentage: data.percentage };
   }
 
-  public async createIngestionJob(payload: IngestionPayload): Promise<JobResponse> {
+  public async createIngestionJob(payload: IngestionPayload, modelId: string): Promise<JobResponse> {
     const logContext = { ...this.logContext, function: this.createIngestionJob.name };
     const isArchive = is3tz(payload.modelPath);
 
     const job = await this.producer.createJob({
       name: this.jobManager.ingestion.jobType,
-      data: { modelPath: payload.modelPath, tilesetFilename: payload.tilesetFilename, metadata: payload.metadata },
+      data: { modelId, modelPath: payload.modelPath, tilesetFilename: payload.tilesetFilename, metadata: payload.metadata },
     });
 
     const stages: StageDescriptor[] = [

@@ -56,9 +56,12 @@ describe('JobnikClient', function () {
   });
 
   it('should create the ingestion job and a validation stage for a folder input', async function () {
-    const result = await client.createIngestionJob(buildPayload('/shared/models/afula'));
+    const result = await client.createIngestionJob(buildPayload('/shared/models/afula'), 'model-1');
 
-    expect(producerMock.createJob).toHaveBeenCalledWith(expect.objectContaining({ name: jobManagerConfig.ingestion.jobType }));
+    const createJobArg = (producerMock.createJob.mock.calls as [{ name: string; data: { modelId: string } }][])[0][0];
+
+    expect(createJobArg.name).toBe(jobManagerConfig.ingestion.jobType);
+    expect(createJobArg.data.modelId).toBe('model-1');
 
     const folderStageTypes = (producerMock.createStage.mock.calls as [string, { type: string }][]).map((call) => call[1].type);
 
@@ -79,7 +82,7 @@ describe('JobnikClient', function () {
   });
 
   it('should also create the data-extraction and clear-data stages for a 3tz input', async function () {
-    await client.createIngestionJob(buildPayload('/shared/models/afula.3tz'));
+    await client.createIngestionJob(buildPayload('/shared/models/afula.3tz'), 'model-1');
 
     const stageTypes = (producerMock.createStage.mock.calls as [string, { type: string }][]).map((call) => call[1].type);
 
