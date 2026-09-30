@@ -1,6 +1,6 @@
 import { jsLogger } from '@map-colonies/js-logger';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { RecordManager, type IngestionPayload } from '@src/record/models/recordManager';
+import { RecordManager, type IngestionPayload } from '@src/records/models/recordManager';
 import type { ValidationManager } from '@src/validator/validationManager';
 import type { JobnikClient } from '@src/externalServices/jobnik/jobnikClient';
 import type { CatalogCall } from '@src/externalServices/catalog/catalogCall';

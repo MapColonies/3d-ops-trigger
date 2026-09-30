@@ -28,7 +28,7 @@ import type { JobnikClient } from '@src/externalServices/jobnik/jobnikClient';
 import type { TilesetReader } from '@src/tileset/tilesetReader';
 import type { ExtractableCall } from '@src/externalServices/extractableManagement/extractableCall';
 import type { Provider } from '@src/providers/interfaces';
-import type { IngestionPayload } from '@src/record/models/recordManager';
+import type { IngestionPayload } from '@src/records/models/recordManager';
 import { buildValidMetadata } from '@tests/helpers/metadata';
 
 const regionTilesetJson = readFileSync(join(__dirname, '../../helpers/tilesets/folder/tileset.json'), 'utf-8');

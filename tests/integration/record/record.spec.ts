@@ -77,21 +77,21 @@ describe('3d-ops-trigger', function () {
     requestSender = await createRequestSender<paths, operations>('openapi3.yaml', app);
   });
 
-  describe('POST /jobOperations/ingestion', function () {
+  describe('POST /records', function () {
     it('should return 201 and a job response for a valid ingestion request', async function () {
-      const response = await requestSender.createIngestion({ requestBody: validIngestionPayload });
+      const response = await requestSender.createRecord({ requestBody: validIngestionPayload });
 
       expect(response).toSatisfyApiSpec();
       expect(response.status).toBe(httpStatusCodes.CREATED);
 
-      const body = response.body as paths['/jobOperations/ingestion']['post']['responses']['201']['content']['application/json'];
+      const body = response.body as paths['/records']['post']['responses']['201']['content']['application/json'];
 
       expect(body.jobId).toBeTypeOf('string');
       expect(body.status).toBeTypeOf('string');
     });
 
     it('should return 400 when a required field is missing', async function () {
-      const response = await requestSender.createIngestion({
+      const response = await requestSender.createRecord({
         // @ts-expect-error intentionally invalid: missing tilesetFilename and metadata
         requestBody: { modelPath: '/app/models/afula' },
       });
@@ -101,7 +101,7 @@ describe('3d-ops-trigger', function () {
     });
 
     it('should return 400 when metadata fails business validation', async function () {
-      const response = await requestSender.createIngestion({
+      const response = await requestSender.createRecord({
         requestBody: { ...validIngestionPayload, metadata: { ...validMetadata, productType: 'NOT_A_3D_TYPE' } },
       });
 
@@ -110,36 +110,9 @@ describe('3d-ops-trigger', function () {
     });
   });
 
-  describe('POST /jobOperations/delete', function () {
-    it('should return 200 and a job response', async function () {
-      const response = await requestSender.createDelete({ requestBody: { id: 'rec-1' } });
-
-      expect(response).toSatisfyApiSpec();
-      expect(response.status).toBe(httpStatusCodes.OK);
-
-      const body = response.body as paths['/jobOperations/delete']['post']['responses']['200']['content']['application/json'];
-
-      expect(body.jobId).toBeTypeOf('string');
-    });
-  });
-
-  describe('GET /jobStatus/{jobId}', function () {
-    it('should return 200 with the job status and percentage', async function () {
-      const response = await requestSender.getJobStatus({ pathParams: { jobId: 'job-1' } });
-
-      expect(response).toSatisfyApiSpec();
-      expect(response.status).toBe(httpStatusCodes.OK);
-
-      const body = response.body as paths['/jobStatus/{jobId}']['get']['responses']['200']['content']['application/json'];
-
-      expect(body.status).toBeTypeOf('string');
-      expect(body.percentage).toBe(42);
-    });
-  });
-
-  describe('POST /models/validate', function () {
+  describe('POST /records/validate', function () {
     it('should return 200 with isValid true for a valid request without creating a job', async function () {
-      const response = await requestSender.validateModel({ requestBody: validIngestionPayload });
+      const response = await requestSender.validateRecord({ requestBody: validIngestionPayload });
 
       expect(response).toSatisfyApiSpec();
       expect(response.status).toBe(httpStatusCodes.OK);
@@ -150,7 +123,7 @@ describe('3d-ops-trigger', function () {
     });
 
     it('should return 200 with isValid false and a message for an invalid request', async function () {
-      const response = await requestSender.validateModel({
+      const response = await requestSender.validateRecord({
         requestBody: { ...validIngestionPayload, metadata: { ...validMetadata, productType: 'NOT_A_3D_TYPE' } },
       });
 
@@ -164,9 +137,9 @@ describe('3d-ops-trigger', function () {
     });
   });
 
-  describe('GET /models/canDelete/{recordId}', function () {
+  describe('GET /records/canDelete/{recordId}', function () {
     it('should return 200 with isValid true for a deletable record', async function () {
-      const response = await requestSender.canDeleteModel({ pathParams: { recordId: 'rec-1' } });
+      const response = await requestSender.canDeleteRecord({ pathParams: { recordId: 'rec-1' } });
 
       expect(response).toSatisfyApiSpec();
       expect(response.status).toBe(httpStatusCodes.OK);
@@ -174,6 +147,19 @@ describe('3d-ops-trigger', function () {
       const body = response.body;
 
       expect(body.isValid).toBe(true);
+    });
+  });
+
+  describe('DELETE /records/{recordId}', function () {
+    it('should return 200 and a job response', async function () {
+      const response = await requestSender.deleteRecord({ pathParams: { recordId: 'rec-1' } });
+
+      expect(response).toSatisfyApiSpec();
+      expect(response.status).toBe(httpStatusCodes.OK);
+
+      const body = response.body as paths['/records/{recordId}']['delete']['responses']['200']['content']['application/json'];
+
+      expect(body.jobId).toBeTypeOf('string');
     });
   });
 
@@ -204,6 +190,20 @@ describe('3d-ops-trigger', function () {
 
       expect(response).toSatisfyApiSpec();
       expect(response.status).toBe(httpStatusCodes.BAD_REQUEST);
+    });
+  });
+
+  describe('GET /jobStatus/{jobId}', function () {
+    it('should return 200 with the job status and percentage', async function () {
+      const response = await requestSender.getJobStatus({ pathParams: { jobId: 'job-1' } });
+
+      expect(response).toSatisfyApiSpec();
+      expect(response.status).toBe(httpStatusCodes.OK);
+
+      const body = response.body as paths['/jobStatus/{jobId}']['get']['responses']['200']['content']['application/json'];
+
+      expect(body.status).toBeTypeOf('string');
+      expect(body.percentage).toBe(42);
     });
   });
 });

@@ -9,12 +9,12 @@ info:
 security:
   - {}
 paths:
-  /jobOperations/ingestion:
+  /records:
     post:
-      operationId: createIngestion
+      operationId: createRecord
       tags:
-        - jobOperations
-      summary: Create a new ingestion job to invoke a new model ingestion flow
+        - records
+      summary: Invoke a new model ingestion flow
       description: Validates the request (light & fast) and creates a Jobnik ingestion job.
       requestBody:
         required: true
@@ -35,19 +35,51 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/error'
-  /jobOperations/delete:
+  /records/validate:
     post:
-      operationId: createDelete
+      operationId: validateRecord
       tags:
-        - jobOperations
-      summary: Create a new delete job to invoke a delete flow
-      description: Validates the record can be deleted and creates a Jobnik delete job.
+        - records
+      summary: Invoke a new model ingestion validation
+      description: Runs the full ingestion validation and returns the result without triggering a Jobnik job.
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/deletePayload'
+              $ref: '#/components/schemas/ingestionPayload'
+      responses:
+        '200':
+          description: Validation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/validationResultResponse'
+  /records/canDelete/{recordId}:
+    get:
+      operationId: canDeleteRecord
+      tags:
+        - records
+      summary: Validate if a record can be removed
+      description: Runs the delete validation and returns the result without creating a job.
+      parameters:
+        - $ref: '#/components/parameters/recordId'
+      responses:
+        '200':
+          description: Validation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/validationResultResponse'
+  /records/{recordId}:
+    delete:
+      operationId: deleteRecord
+      tags:
+        - records
+      summary: Delete a model by record id
+      description: Validates the record can be deleted and creates a Jobnik delete job.
+      parameters:
+        - $ref: '#/components/parameters/recordId'
       responses:
         '200':
           description: Delete job created
@@ -67,63 +99,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/error'
-  /jobStatus/{jobId}:
-    get:
-      operationId: getJobStatus
-      tags:
-        - jobStatus
-      summary: Get the status and progress of a job
-      parameters:
-        - $ref: '#/components/parameters/jobId'
-      responses:
-        '200':
-          description: Job status
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/jobStatusResponse'
-        '404':
-          description: Job not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/error'
-  /models/validate:
-    post:
-      operationId: validateModel
-      tags:
-        - models
-      summary: Validate an ingestion request without creating a job
-      description: Runs the full ingestion validation and returns the result without triggering a Jobnik job.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ingestionPayload'
-      responses:
-        '200':
-          description: Validation result
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/validationResultResponse'
-  /models/canDelete/{recordId}:
-    get:
-      operationId: canDeleteModel
-      tags:
-        - models
-      summary: Validate whether a record can be deleted
-      description: Runs the delete validation and returns the result without creating a job.
-      parameters:
-        - $ref: '#/components/parameters/recordId'
-      responses:
-        '200':
-          description: Validation result
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/validationResultResponse'
   /metadata/{identifier}:
     patch:
       operationId: updateMetadata
@@ -190,6 +165,27 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/error'
+  /jobStatus/{jobId}:
+    get:
+      operationId: getJobStatus
+      tags:
+        - jobStatus
+      summary: Get the status and progress of a job
+      parameters:
+        - $ref: '#/components/parameters/jobId'
+      responses:
+        '200':
+          description: Job status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jobStatusResponse'
+        '404':
+          description: Job not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/error'
 components:
   parameters:
     identifier:
@@ -238,14 +234,6 @@ components:
           type: object
           description: 3D record metadata (business validation applied downstream)
           additionalProperties: true
-    deletePayload:
-      type: object
-      required:
-        - id
-      properties:
-        id:
-          type: string
-          description: The record identifier to delete
     updatePayload:
       type: object
       description: Partial metadata fields to update

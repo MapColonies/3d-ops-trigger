@@ -4,7 +4,7 @@ import { injectable, inject } from 'tsyringe';
 import type { TypedRequestHandlers } from '@openapi';
 import { SERVICES } from '@common/constants';
 import type { LogContext } from '@common/interfaces';
-import { RecordManager } from '../../record/models/recordManager';
+import { RecordManager } from '../../records/models/recordManager';
 
 @injectable()
 export class MetadataController {

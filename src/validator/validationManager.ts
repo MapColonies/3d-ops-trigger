@@ -17,7 +17,7 @@ import { ExtractableCall } from '../externalServices/extractableManagement/extra
 import { TilesetReader } from '../tileset/tilesetReader';
 import type { Record3D } from '../externalServices/catalog/interfaces';
 import type { Provider } from '../providers/interfaces';
-import type { IngestionPayload } from '../record/models/recordManager';
+import type { IngestionPayload } from '../records/models/recordManager';
 
 type UpdatePayload = components['schemas']['updatePayload'];
 

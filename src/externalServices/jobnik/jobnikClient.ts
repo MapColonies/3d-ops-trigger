@@ -9,7 +9,7 @@ import { is3tz } from '@common/util';
 import { AppError } from '@common/appError';
 import type { ConfigType, JobManagerConfig } from '@common/config';
 import type { LogContext } from '@common/interfaces';
-import type { IngestionPayload, JobResponse } from '../../record/models/recordManager';
+import type { IngestionPayload, JobResponse } from '../../records/models/recordManager';
 import type { Record3D } from '../catalog/interfaces';
 
 interface StageDescriptor {

@@ -4,7 +4,7 @@ import { Registry } from 'prom-client';
 import { JobnikClient } from '@src/externalServices/jobnik/jobnikClient';
 import { STAGE_TYPES } from '@src/common/constants';
 import type { ConfigType } from '@src/common/config';
-import type { IngestionPayload } from '@src/record/models/recordManager';
+import type { IngestionPayload } from '@src/records/models/recordManager';
 
 const jobManagerConfig = {
   url: 'http://job-manager',
