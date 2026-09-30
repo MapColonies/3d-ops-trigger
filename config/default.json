@@ -52,6 +52,9 @@
       "taskType": "deleteModel"
     }
   },
+  "validation": {
+    "percentageLimit": 10
+  },
   "provider": "NFS",
   "NFS": {
     "pvPath": "/app/models"

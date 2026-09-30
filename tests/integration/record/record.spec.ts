@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { jsLogger } from '@map-colonies/js-logger';
 import { describe, beforeEach, it, expect, beforeAll, vi } from 'vitest';
 import { trace } from '@opentelemetry/api';
@@ -10,7 +12,10 @@ import { initConfig } from '@src/common/config';
 import { LookupTablesCall } from '@src/externalServices/lookupTables/lookupTablesCall';
 import { CatalogCall } from '@src/externalServices/catalog/catalogCall';
 import { JobnikClient } from '@src/externalServices/jobnik/jobnikClient';
+import { TilesetReader } from '@src/tileset/tilesetReader';
 import { buildValidMetadata } from '@tests/helpers/metadata';
+
+const regionTilesetJson = readFileSync(join(__dirname, '../../helpers/tilesets/folder/tileset.json'), 'utf-8');
 
 const deletableRecord = {
   id: 'rec-1',
@@ -32,6 +37,7 @@ const jobnikStub = {
   createDeleteJob: vi.fn().mockResolvedValue({ jobId: 'del-1', status: 'PENDING' }),
   hasInFlightIngestionJob: vi.fn().mockResolvedValue(false),
 } as unknown as JobnikClient;
+const tilesetReaderStub = { readTilesetJson: vi.fn().mockResolvedValue(regionTilesetJson) } as unknown as TilesetReader;
 const providerStub = { fileExists: vi.fn().mockResolvedValue(true) };
 
 const validMetadata = buildValidMetadata();
@@ -57,6 +63,7 @@ describe('record', function () {
         { token: LookupTablesCall, provider: { useValue: lookupStub } },
         { token: CatalogCall, provider: { useValue: catalogStub } },
         { token: JobnikClient, provider: { useValue: jobnikStub } },
+        { token: TilesetReader, provider: { useValue: tilesetReaderStub } },
         { token: SERVICES.PROVIDER, provider: { useValue: providerStub } },
       ],
       useChild: true,

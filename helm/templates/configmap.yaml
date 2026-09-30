@@ -45,6 +45,7 @@ data:
   JOB_DELETE_TYPE: {{ .delete.jobType | quote }}
   TASK_DELETE_TYPE: {{ .delete.taskType | quote }}
   {{- end }}
+  VALIDATION_PERCENTAGE_LIMIT: {{ .Values.validation.percentageLimit | quote }}
   PROVIDER_FROM: {{ .Values.provider | quote }}
   {{- if eq .Values.provider "NFS" }}
   PV_SOURCE_PATH: {{ .Values.NFS.pvPath | quote }}

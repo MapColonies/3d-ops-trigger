@@ -1,0 +1,35 @@
+{
+  "asset": { "version": "1.1" },
+  "geometricError": 500.0,
+  "root": {
+    "boundingVolume": { "region": [0.613745031463806, 0.5741784173210945, 0.614094097314205, 0.5744402167088937, -10.0, 200.0] },
+    "geometricError": 500.0,
+    "refine": "ADD",
+    "children": [
+      {
+        "boundingVolume": { "region": [0.613745031463806, 0.5741784173210945, 0.614094097314205, 0.5744402167088937, -10.0, 200.0] },
+        "geometricError": 500.0,
+        "refine": "ADD",
+        "content": { "uri": "./terrain/tileset.json" }
+      },
+      {
+        "boundingVolume": { "region": [0.613745031463806, 0.5741784173210945, 0.614094097314205, 0.5744402167088937, -10.0, 200.0] },
+        "geometricError": 500.0,
+        "refine": "ADD",
+        "content": { "uri": "./buildings/tileset.json" }
+      },
+      {
+        "boundingVolume": { "region": [0.613745031463806, 0.5741784173210945, 0.614094097314205, 0.5744402167088937, -10.0, 200.0] },
+        "geometricError": 500.0,
+        "refine": "ADD",
+        "content": { "uri": "./roof_furniture/tileset.json" }
+      },
+      {
+        "boundingVolume": { "region": [0.613745031463806, 0.5741784173210945, 0.614094097314205, 0.5744402167088937, -10.0, 200.0] },
+        "geometricError": 500.0,
+        "refine": "ADD",
+        "content": { "uri": "./trees/tileset.json" }
+      }
+    ]
+  }
+}

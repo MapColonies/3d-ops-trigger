@@ -21,6 +21,12 @@
       "taskType": "TASK_DELETE_TYPE"
     }
   },
+  "validation": {
+    "percentageLimit": {
+      "__name": "VALIDATION_PERCENTAGE_LIMIT",
+      "__format": "number"
+    }
+  },
   "provider": "PROVIDER_FROM",
   "NFS": {
     "pvPath": "PV_SOURCE_PATH"

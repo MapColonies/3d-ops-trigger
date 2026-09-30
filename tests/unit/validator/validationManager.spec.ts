@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { jsLogger } from '@map-colonies/js-logger';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { StatusCodes } from 'http-status-codes';
@@ -12,16 +14,23 @@ import {
   ERROR_DELETE_STATUS,
   ERROR_FILE_NOT_FOUND,
   ERROR_PRODUCT_NAME_IN_FLIGHT,
+  ERROR_FOOTPRINT_FAR_FROM_MODEL,
 } from '@src/validator/validationManager';
 import { AppError } from '@src/common/appError';
+import type { ConfigType } from '@src/common/config';
 import type { LookupTablesCall } from '@src/externalServices/lookupTables/lookupTablesCall';
 import type { CatalogCall } from '@src/externalServices/catalog/catalogCall';
 import type { JobnikClient } from '@src/externalServices/jobnik/jobnikClient';
+import type { TilesetReader } from '@src/tileset/tilesetReader';
 import type { Provider } from '@src/providers/interfaces';
 import type { IngestionPayload } from '@src/record/models/recordManager';
 import { buildValidMetadata } from '@tests/helpers/metadata';
 
+const regionTilesetJson = readFileSync(join(__dirname, '../../helpers/tilesets/folder/tileset.json'), 'utf-8');
+const boxTilesetJson = JSON.stringify({ root: { boundingVolume: { box: [0, 0, 0, 100, 0, 0, 0, 100, 0, 0, 0, 100] } } });
+
 const lookupStub = { getClassifications: vi.fn().mockResolvedValue(['abc123']) } as unknown as LookupTablesCall;
+const configStub = { get: vi.fn().mockReturnValue(10) } as unknown as ConfigType;
 
 const ingest = (metadata: Record<string, unknown>): IngestionPayload => ({
   modelPath: '/shared/models/afula',
@@ -33,13 +42,23 @@ describe('ValidationManager', function () {
   let validator: ValidationManager;
   let catalogStub: CatalogCall;
   let jobnikStub: JobnikClient;
+  let tilesetReaderStub: TilesetReader;
   let providerStub: Provider;
 
   beforeEach(async function () {
     catalogStub = { findRecords: vi.fn().mockResolvedValue([]) } as unknown as CatalogCall;
     jobnikStub = { hasInFlightIngestionJob: vi.fn().mockResolvedValue(false) } as unknown as JobnikClient;
+    tilesetReaderStub = { readTilesetJson: vi.fn().mockResolvedValue(regionTilesetJson) } as unknown as TilesetReader;
     providerStub = { fileExists: vi.fn().mockResolvedValue(true) };
-    validator = new ValidationManager(await jsLogger({ enabled: false }), lookupStub, catalogStub, jobnikStub, providerStub);
+    validator = new ValidationManager(
+      configStub,
+      await jsLogger({ enabled: false }),
+      lookupStub,
+      catalogStub,
+      jobnikStub,
+      tilesetReaderStub,
+      providerStub
+    );
   });
 
   it('should pass a fully valid ingestion payload', async function () {
@@ -123,6 +142,38 @@ describe('ValidationManager', function () {
     (providerStub.fileExists as ReturnType<typeof vi.fn>).mockResolvedValueOnce(false);
 
     await expect(validator.validateIngestion(ingest(buildValidMetadata()))).rejects.toThrow(ERROR_FILE_NOT_FOUND);
+  });
+
+  it('should throw 400 when the footprint does not intersect the tileset model', async function () {
+    const metadata = buildValidMetadata();
+    metadata.footprint = {
+      type: 'Polygon',
+      coordinates: [
+        [
+          [10, 10],
+          [10.01, 10],
+          [10.01, 10.01],
+          [10, 10.01],
+          [10, 10],
+        ],
+      ],
+    };
+
+    await expect(validator.validateIngestion(ingest(metadata))).rejects.toThrow(ERROR_FOOTPRINT_FAR_FROM_MODEL);
+  });
+
+  it('should throw 400 when the tileset bounding volume is an unsupported box', async function () {
+    (tilesetReaderStub.readTilesetJson as ReturnType<typeof vi.fn>).mockResolvedValueOnce(boxTilesetJson);
+
+    let thrown: unknown;
+    try {
+      await validator.validateIngestion(ingest(buildValidMetadata()));
+    } catch (err) {
+      thrown = err;
+    }
+
+    expect(thrown).toBeInstanceOf(AppError);
+    expect((thrown as AppError).status).toBe(StatusCodes.BAD_REQUEST);
   });
 
   describe('validateDelete', function () {

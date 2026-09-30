@@ -17,9 +17,11 @@ export const buildValidMetadata = (): Record<string, unknown> => ({
     type: 'Polygon',
     coordinates: [
       [
-        [34.45, 31.48],
-        [34.46, 31.48],
-        [34.45, 31.48],
+        [35.17, 32.9],
+        [35.18, 32.9],
+        [35.18, 32.91],
+        [35.17, 32.91],
+        [35.17, 32.9],
       ],
     ],
   },
