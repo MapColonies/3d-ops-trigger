@@ -9,6 +9,7 @@ interface LookupTablesConfig {
 interface ExternalServicesConfig {
   lookupTables: LookupTablesConfig;
   catalog: string;
+  extractable: string;
 }
 
 interface JobManagerConfig {
@@ -98,7 +99,7 @@ const opsTriggerConfigSchema = {
         },
         externalServices: {
           type: 'object',
-          required: ['lookupTables', 'catalog'],
+          required: ['lookupTables', 'catalog', 'extractable'],
           properties: {
             lookupTables: {
               type: 'object',
@@ -109,6 +110,7 @@ const opsTriggerConfigSchema = {
               },
             },
             catalog: { type: 'string' },
+            extractable: { type: 'string' },
           },
         },
         jobManager: {

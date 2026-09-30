@@ -1,10 +1,13 @@
 import type { Logger } from '@map-colonies/js-logger';
 import { inject, injectable } from 'tsyringe';
+import type { Polygon } from 'geojson';
 import type { components } from '@openapi';
 import { SERVICES } from '@common/constants';
 import type { LogContext } from '@common/interfaces';
+import { convertPolygonTo2DPolygon } from '@common/util';
 import { ValidationManager } from '../../validator/validationManager';
 import { JobnikClient } from '../../externalServices/jobnik/jobnikClient';
+import { CatalogCall } from '../../externalServices/catalog/catalogCall';
 
 export type IngestionPayload = components['schemas']['ingestionPayload'];
 export type UpdatePayload = components['schemas']['updatePayload'];
@@ -19,7 +22,8 @@ export class RecordManager {
   public constructor(
     @inject(SERVICES.LOGGER) private readonly logger: Logger,
     @inject(ValidationManager) private readonly validator: ValidationManager,
-    @inject(JobnikClient) private readonly jobnik: JobnikClient
+    @inject(JobnikClient) private readonly jobnik: JobnikClient,
+    @inject(CatalogCall) private readonly catalog: CatalogCall
   ) {
     this.logContext = {
       fileName: __filename,
@@ -41,15 +45,29 @@ export class RecordManager {
     return this.jobnik.createDeleteJob(record);
   }
 
-  public updateMetadata(id: string, update: UpdatePayload): AckResponse {
+  public async updateMetadata(id: string, update: UpdatePayload): Promise<AckResponse> {
     const logContext = { ...this.logContext, function: this.updateMetadata.name };
-    this.logger.info({ msg: 'updating record metadata', logContext, recordId: id, fields: Object.keys(update) });
-    return { message: `metadata update accepted for record ${id}` };
+    this.logger.info({ msg: 'updating record metadata', logContext, recordId: id });
+    const record = await this.validator.validateUpdate(id, update);
+    await this.validator.ensureRecordAbsentFromExtractable(record);
+
+    const payload: Record<string, unknown> = { ...update };
+    if (payload.footprint !== undefined) {
+      payload.footprint = convertPolygonTo2DPolygon(payload.footprint as Polygon);
+    }
+    await this.catalog.patchMetadata(id, payload);
+
+    return { message: `metadata updated for record ${id}` };
   }
 
-  public updateStatus(id: string, payload: StatusPayload): AckResponse {
+  public async updateStatus(id: string, payload: StatusPayload): Promise<AckResponse> {
     const logContext = { ...this.logContext, function: this.updateStatus.name };
     this.logger.info({ msg: 'updating record status', logContext, recordId: id, status: payload.status });
+    const record = await this.validator.validateStatusChange(id);
+    await this.validator.ensureRecordAbsentFromExtractable(record);
+
+    await this.catalog.changeStatus(id, { productStatus: payload.status });
+
     return { message: `status ${payload.status} accepted for record ${id}` };
   }
 }

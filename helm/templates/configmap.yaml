@@ -32,6 +32,7 @@ data:
   npm_config_cache: /tmp/
   {{- with .Values.externalServices }}
   CATALOG_URL: {{ .catalog | quote }}
+  EXTRACTABLE_URL: {{ .extractable | quote }}
   {{- with .lookupTables }}
   LOOKUP_TABLES_URL: {{ .url | quote }}
   LOOKUP_TABLES_SUB_URL: {{ .subUrl | quote }}

@@ -80,6 +80,7 @@ server:
 
 externalServices:
   catalog: ''
+  extractable: ''
   lookupTables:
     url: ''
     subUrl: ''

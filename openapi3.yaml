@@ -126,6 +126,27 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/error'
+  /jobs/{jobId}:
+    get:
+      operationId: getJobStatus
+      tags:
+        - job
+      summary: Get the status and progress of a job
+      parameters:
+        - $ref: '#/components/parameters/jobId'
+      responses:
+        200:
+          description: Job status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jobStatusResponse'
+        404:
+          description: Job not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/error'
 security:
   - {}
 components:
@@ -135,6 +156,13 @@ components:
       in: path
       required: true
       description: The record identifier
+      schema:
+        type: string
+    jobId:
+      name: jobId
+      in: path
+      required: true
+      description: The job identifier
       schema:
         type: string
   schemas:
@@ -193,3 +221,12 @@ components:
       properties:
         message:
           type: string
+    jobStatusResponse:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+        percentage:
+          type: number

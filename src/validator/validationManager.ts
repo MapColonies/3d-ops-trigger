@@ -4,6 +4,7 @@ import { inject, injectable } from 'tsyringe';
 import { new3DLayerMetadataSchema, geometrySchema, calculatePolygonFromTileset, type TileSetJson } from '@map-colonies/3d-shared';
 import { area, feature, featureCollection, intersect, union } from '@turf/turf';
 import type { Feature, MultiPolygon, Polygon } from 'geojson';
+import type { components } from '@openapi';
 import { SERVICES } from '@common/constants';
 import type { LogContext, ValidationResponse } from '@common/interfaces';
 import { AppError } from '@common/appError';
@@ -12,15 +13,19 @@ import type { ConfigType } from '@common/config';
 import { LookupTablesCall } from '../externalServices/lookupTables/lookupTablesCall';
 import { CatalogCall } from '../externalServices/catalog/catalogCall';
 import { JobnikClient } from '../externalServices/jobnik/jobnikClient';
+import { ExtractableCall } from '../externalServices/extractableManagement/extractableCall';
 import { TilesetReader } from '../tileset/tilesetReader';
 import type { Record3D } from '../externalServices/catalog/interfaces';
 import type { Provider } from '../providers/interfaces';
 import type { IngestionPayload } from '../record/models/recordManager';
 
+type UpdatePayload = components['schemas']['updatePayload'];
+
 const FULL_COVERAGE_PERCENT = 100;
 
 const BLOCKED_DELETE_PRODUCT_TYPE = 'QuantizedMeshDTMBest';
 const RECORD_STATUS_UNPUBLISHED = 'UNPUBLISHED';
+const RECORD_STATUS_BEING_DELETED = 'BEING_DELETED';
 
 export const ERROR_METADATA_DATE = 'imagingTimeBeginUTC must not be later than imagingTimeEndUTC';
 export const ERROR_METADATA_MISSING_DATE = 'imagingTimeBeginUTC and imagingTimeEndUTC are required';
@@ -35,6 +40,9 @@ export const ERROR_FILE_NOT_FOUND = 'The model files do not exist in the agreed 
 export const ERROR_TILESET_INVALID = 'The tileset file is not a valid 3DTiles tileset';
 export const ERROR_FOOTPRINT_FAR_FROM_MODEL = "Wrong footprint! footprint's coordinates is not even close to the model!";
 export const ERROR_INTERSECTION_FAILED = 'An error caused during the validation of the intersection';
+export const ERROR_RECORD_NOT_FOUND = "record with the given identifier doesn't exist";
+export const ERROR_RECORD_BEING_DELETED = 'cannot change a record that is being deleted';
+export const ERROR_EXTRACTABLE_CONFLICT = 'the record exists in the extractable-management service and cannot be changed here';
 
 @injectable()
 export class ValidationManager {
@@ -48,6 +56,7 @@ export class ValidationManager {
     @inject(CatalogCall) private readonly catalog: CatalogCall,
     @inject(JobnikClient) private readonly jobnik: JobnikClient,
     @inject(TilesetReader) private readonly tilesetReader: TilesetReader,
+    @inject(ExtractableCall) private readonly extractable: ExtractableCall,
     @inject(SERVICES.PROVIDER) private readonly provider: Provider
   ) {
     this.percentageLimit = this.config.get('validation.percentageLimit');
@@ -101,6 +110,69 @@ export class ValidationManager {
     }
 
     return record;
+  }
+
+  public async validateUpdate(identifier: string, payload: UpdatePayload): Promise<Record3D> {
+    const record = await this.catalog.getRecord(identifier);
+    if (record === undefined) {
+      throw new AppError('notFound', StatusCodes.NOT_FOUND, ERROR_RECORD_NOT_FOUND, true);
+    }
+    if (record.productStatus === RECORD_STATUS_BEING_DELETED) {
+      throw new AppError('badRequest', StatusCodes.BAD_REQUEST, ERROR_RECORD_BEING_DELETED, true);
+    }
+
+    const parsed = new3DLayerMetadataSchema.partial().safeParse(payload);
+    if (!parsed.success) {
+      const message = parsed.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join('; ');
+      throw new AppError('badRequest', StatusCodes.BAD_REQUEST, message, true);
+    }
+
+    const footprint = (payload as { footprint?: unknown }).footprint;
+    if (footprint !== undefined && !geometrySchema.safeParse(footprint).success) {
+      throw new AppError('badRequest', StatusCodes.BAD_REQUEST, ERROR_METADATA_FOOTPRINT, true);
+    }
+
+    const data = parsed.data;
+    if (data.classification !== undefined) {
+      await this.validateClassification(data.classification);
+    }
+    if (data.productName !== undefined) {
+      await this.validateProductNameUniqueExcept(data.productName, identifier);
+    }
+
+    return record;
+  }
+
+  public async validateStatusChange(identifier: string): Promise<Record3D> {
+    const record = await this.catalog.getRecord(identifier);
+    if (record === undefined) {
+      throw new AppError('notFound', StatusCodes.NOT_FOUND, ERROR_RECORD_NOT_FOUND, true);
+    }
+    if (record.productStatus === RECORD_STATUS_BEING_DELETED) {
+      throw new AppError('badRequest', StatusCodes.BAD_REQUEST, ERROR_RECORD_BEING_DELETED, true);
+    }
+
+    return record;
+  }
+
+  public async ensureRecordAbsentFromExtractable(record: Record3D): Promise<void> {
+    const logContext = { ...this.logContext, function: this.ensureRecordAbsentFromExtractable.name };
+    if (record.productName === undefined) {
+      return;
+    }
+
+    const exists = await this.extractable.isExtractableRecordExists(record.productName);
+    this.logger.debug({ msg: 'extractable existence validation', logContext, productName: record.productName, exists });
+    if (exists) {
+      throw new AppError('conflict', StatusCodes.CONFLICT, ERROR_EXTRACTABLE_CONFLICT, true);
+    }
+  }
+
+  private async validateProductNameUniqueExcept(productName: string, identifier: string): Promise<void> {
+    const records = await this.catalog.findRecords({ productName });
+    if (records.some((existing) => existing.id !== identifier)) {
+      throw new AppError('badRequest', StatusCodes.BAD_REQUEST, ERROR_METADATA_PRODUCT_NAME_UNIQUE, true);
+    }
   }
 
   private async validateFileExists(modelPath: string, tilesetFilename: string): Promise<void> {

@@ -3,21 +3,31 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { RecordManager, type IngestionPayload } from '@src/record/models/recordManager';
 import type { ValidationManager } from '@src/validator/validationManager';
 import type { JobnikClient } from '@src/externalServices/jobnik/jobnikClient';
+import type { CatalogCall } from '@src/externalServices/catalog/catalogCall';
 
 const noopValidator = {
   validateIngestion: vi.fn().mockResolvedValue(undefined),
   validateDelete: vi.fn().mockResolvedValue({ id: 'rec-1', productName: 'afula' }),
+  validateUpdate: vi.fn().mockResolvedValue({ id: 'rec-1', productName: 'afula' }),
+  validateStatusChange: vi.fn().mockResolvedValue({ id: 'rec-1', productName: 'afula' }),
+  ensureRecordAbsentFromExtractable: vi.fn().mockResolvedValue(undefined),
 } as unknown as ValidationManager;
 const jobnikStub = {
   createIngestionJob: vi.fn().mockResolvedValue({ jobId: 'job-1', status: 'PENDING' }),
   createDeleteJob: vi.fn().mockResolvedValue({ jobId: 'del-1', status: 'PENDING' }),
 } as unknown as JobnikClient;
+const patchMetadataMock = vi.fn().mockResolvedValue({ id: 'rec-1' });
+const changeStatusMock = vi.fn().mockResolvedValue({ id: 'rec-1' });
+const catalogStub = {
+  patchMetadata: patchMetadataMock,
+  changeStatus: changeStatusMock,
+} as unknown as CatalogCall;
 
 describe('RecordManager', function () {
   let manager: RecordManager;
 
   beforeEach(async function () {
-    manager = new RecordManager(await jsLogger({ enabled: false }), noopValidator, jobnikStub);
+    manager = new RecordManager(await jsLogger({ enabled: false }), noopValidator, jobnikStub, catalogStub);
   });
 
   describe('createIngestion', function () {
@@ -45,17 +55,19 @@ describe('RecordManager', function () {
   });
 
   describe('updateMetadata', function () {
-    it('should return an ack referencing the record id', function () {
-      const result = manager.updateMetadata('rec-1', { description: 'x' });
+    it('should validate, guard extractable, patch the catalog and return an ack', async function () {
+      const result = await manager.updateMetadata('rec-1', { description: 'x' });
 
+      expect(patchMetadataMock).toHaveBeenCalledWith('rec-1', expect.objectContaining({ description: 'x' }));
       expect(result.message).toContain('rec-1');
     });
   });
 
   describe('updateStatus', function () {
-    it('should return an ack referencing the requested status', function () {
-      const result = manager.updateStatus('rec-1', { status: 'PUBLISHED' });
+    it('should validate, guard extractable, change the catalog status and return an ack', async function () {
+      const result = await manager.updateStatus('rec-1', { status: 'PUBLISHED' });
 
+      expect(changeStatusMock).toHaveBeenCalledWith('rec-1', { productStatus: 'PUBLISHED' });
       expect(result.message).toContain('PUBLISHED');
     });
   });

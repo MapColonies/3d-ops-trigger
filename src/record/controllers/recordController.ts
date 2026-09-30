@@ -52,11 +52,11 @@ export class RecordController {
     }
   };
 
-  public updateRecord: TypedRequestHandlers['updateRecord'] = (req, res, next) => {
+  public updateRecord: TypedRequestHandlers['updateRecord'] = async (req, res, next) => {
     const logContext = { ...this.logContext, function: this.updateRecord.name };
     const { id } = req.params;
     try {
-      const ack = this.manager.updateMetadata(id, req.body);
+      const ack = await this.manager.updateMetadata(id, req.body);
       return res.status(StatusCodes.OK).json(ack);
     } catch (err) {
       this.logger.error({ msg: 'failed to update record metadata', logContext, err, recordId: id });
@@ -64,11 +64,11 @@ export class RecordController {
     }
   };
 
-  public updateRecordStatus: TypedRequestHandlers['updateRecordStatus'] = (req, res, next) => {
+  public updateRecordStatus: TypedRequestHandlers['updateRecordStatus'] = async (req, res, next) => {
     const logContext = { ...this.logContext, function: this.updateRecordStatus.name };
     const { id } = req.params;
     try {
-      const ack = this.manager.updateStatus(id, req.body);
+      const ack = await this.manager.updateStatus(id, req.body);
       return res.status(StatusCodes.OK).json(ack);
     } catch (err) {
       this.logger.error({ msg: 'failed to update record status', logContext, err, recordId: id });

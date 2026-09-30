@@ -13,6 +13,7 @@ import { LookupTablesCall } from '@src/externalServices/lookupTables/lookupTable
 import { CatalogCall } from '@src/externalServices/catalog/catalogCall';
 import { JobnikClient } from '@src/externalServices/jobnik/jobnikClient';
 import { TilesetReader } from '@src/tileset/tilesetReader';
+import { ExtractableCall } from '@src/externalServices/extractableManagement/extractableCall';
 import { buildValidMetadata } from '@tests/helpers/metadata';
 
 const regionTilesetJson = readFileSync(join(__dirname, '../../helpers/tilesets/folder/tileset.json'), 'utf-8');
@@ -31,13 +32,18 @@ const lookupStub = { getClassifications: vi.fn().mockResolvedValue(['abc123']) }
 // findRecords by id (delete) → an existing deletable record; by productName (uniqueness) → none
 const catalogStub = {
   findRecords: vi.fn().mockImplementation((payload: { id?: string }) => (payload.id !== undefined ? [deletableRecord] : [])),
+  getRecord: vi.fn().mockResolvedValue(deletableRecord),
+  patchMetadata: vi.fn().mockResolvedValue(deletableRecord),
+  changeStatus: vi.fn().mockResolvedValue(deletableRecord),
 } as unknown as CatalogCall;
 const jobnikStub = {
   createIngestionJob: vi.fn().mockResolvedValue({ jobId: 'job-1', status: 'PENDING' }),
   createDeleteJob: vi.fn().mockResolvedValue({ jobId: 'del-1', status: 'PENDING' }),
   hasInFlightIngestionJob: vi.fn().mockResolvedValue(false),
+  getJobStatus: vi.fn().mockResolvedValue({ status: 'IN_PROGRESS', percentage: 42 }),
 } as unknown as JobnikClient;
 const tilesetReaderStub = { readTilesetJson: vi.fn().mockResolvedValue(regionTilesetJson) } as unknown as TilesetReader;
+const extractableStub = { isExtractableRecordExists: vi.fn().mockResolvedValue(false) } as unknown as ExtractableCall;
 const providerStub = { fileExists: vi.fn().mockResolvedValue(true) };
 
 const validMetadata = buildValidMetadata();
@@ -64,6 +70,7 @@ describe('record', function () {
         { token: CatalogCall, provider: { useValue: catalogStub } },
         { token: JobnikClient, provider: { useValue: jobnikStub } },
         { token: TilesetReader, provider: { useValue: tilesetReaderStub } },
+        { token: ExtractableCall, provider: { useValue: extractableStub } },
         { token: SERVICES.PROVIDER, provider: { useValue: providerStub } },
       ],
       useChild: true,
@@ -144,6 +151,20 @@ describe('record', function () {
 
       expect(response).toSatisfyApiSpec();
       expect(response.status).toBe(httpStatusCodes.BAD_REQUEST);
+    });
+  });
+
+  describe('GET /jobs/{jobId}', function () {
+    it('should return 200 with the job status and percentage', async function () {
+      const response = await requestSender.getJobStatus({ pathParams: { jobId: 'job-1' } });
+
+      expect(response).toSatisfyApiSpec();
+      expect(response.status).toBe(httpStatusCodes.OK);
+
+      const body = response.body as paths['/jobs/{jobId}']['get']['responses']['200']['content']['application/json'];
+
+      expect(body.status).toBeTypeOf('string');
+      expect(body.percentage).toBe(42);
     });
   });
 });

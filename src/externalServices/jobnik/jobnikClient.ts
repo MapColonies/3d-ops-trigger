@@ -3,6 +3,7 @@ import { StatusCodes } from 'http-status-codes';
 import type { Logger } from '@map-colonies/js-logger';
 import type { Registry } from 'prom-client';
 import { JobnikSDK } from '@map-colonies/jobnik-sdk';
+import type { JobId } from '@map-colonies/jobnik-sdk';
 import { IN_FLIGHT_JOB_STATUSES, SERVICES, STAGE_TYPES } from '@common/constants';
 import { is3tz } from '@common/util';
 import { AppError } from '@common/appError';
@@ -16,6 +17,11 @@ interface StageDescriptor {
   data: Record<string, unknown>;
   task?: Record<string, unknown>;
   only3tz?: boolean;
+}
+
+export interface JobStatusResponse {
+  status: string;
+  percentage?: number;
 }
 
 @singleton()
@@ -67,6 +73,20 @@ export class JobnikClient {
         return false;
       }
     }
+  }
+
+  public async getJobStatus(jobId: string): Promise<JobStatusResponse> {
+    const logContext = { ...this.logContext, function: this.getJobStatus.name };
+    const { data, error, response } = await this.apiClient.GET('/v1/jobs/{jobId}', { params: { path: { jobId: jobId as JobId } } });
+    if (error !== undefined) {
+      if (response.status === StatusCodes.NOT_FOUND.valueOf()) {
+        throw new AppError('badRequest', StatusCodes.NOT_FOUND, `job ${jobId} was not found`, true);
+      }
+      this.logger.error({ msg: 'failed querying Jobnik for job status', logContext, jobId, err: error });
+      throw new AppError('jobnik', StatusCodes.INTERNAL_SERVER_ERROR, 'failed querying Jobnik for job status', false);
+    }
+
+    return { status: data.status, percentage: data.percentage };
   }
 
   public async createIngestionJob(payload: IngestionPayload): Promise<JobResponse> {
