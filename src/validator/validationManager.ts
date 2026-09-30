@@ -43,11 +43,14 @@ export const ERROR_INTERSECTION_FAILED = 'An error caused during the validation 
 export const ERROR_RECORD_NOT_FOUND = "record with the given identifier doesn't exist";
 export const ERROR_RECORD_BEING_DELETED = 'cannot change a record that is being deleted';
 export const ERROR_EXTRACTABLE_CONFLICT = 'the record exists in the extractable-management service and cannot be changed here';
+export const ERROR_MODEL_PATH_INVALID = 'Unknown model path! The model is not under the agreed base path';
+export const ERROR_PRODUCT_ID_EXISTS = 'a record with this productId already exists in the catalog';
 
 @injectable()
 export class ValidationManager {
   private readonly logContext: LogContext;
   private readonly percentageLimit: number;
+  private readonly basePath: string;
 
   public constructor(
     @inject(SERVICES.CONFIG) private readonly config: ConfigType,
@@ -60,6 +63,7 @@ export class ValidationManager {
     @inject(SERVICES.PROVIDER) private readonly provider: Provider
   ) {
     this.percentageLimit = this.config.get('validation.percentageLimit');
+    this.basePath = this.config.get('validation.basePath');
     this.logContext = {
       fileName: __filename,
       class: ValidationManager.name,
@@ -83,10 +87,12 @@ export class ValidationManager {
     }
 
     this.validateDates(metadata.imagingTimeBeginUTC, metadata.imagingTimeEndUTC);
+    this.validateModelPath(payload.modelPath);
 
     await this.validateClassification(parsed.data.classification);
     await this.validateProductNameUnique(parsed.data.productName);
     await this.validateProductNameNotInFlight(parsed.data.productName);
+    await this.validateProductIdUnique(parsed.data.productId);
     await this.validateFileExists(payload.modelPath, payload.tilesetFilename);
     await this.validateTileset(payload, footprintResult.data);
   }
@@ -172,6 +178,22 @@ export class ValidationManager {
     const records = await this.catalog.findRecords({ productName });
     if (records.some((existing) => existing.id !== identifier)) {
       throw new AppError('badRequest', StatusCodes.BAD_REQUEST, ERROR_METADATA_PRODUCT_NAME_UNIQUE, true);
+    }
+  }
+
+  private validateModelPath(modelPath: string): void {
+    if (!modelPath.startsWith(this.basePath)) {
+      throw new AppError('badRequest', StatusCodes.BAD_REQUEST, `${ERROR_MODEL_PATH_INVALID} (basePath: ${this.basePath})`, true);
+    }
+  }
+
+  private async validateProductIdUnique(productId: string): Promise<void> {
+    const logContext = { ...this.logContext, function: this.validateProductIdUnique.name };
+    const records = await this.catalog.findRecords({ productId });
+    this.logger.debug({ msg: 'product id uniqueness validation', logContext, productId, matches: records.length });
+
+    if (records.length > 0) {
+      throw new AppError('conflict', StatusCodes.CONFLICT, ERROR_PRODUCT_ID_EXISTS, true);
     }
   }
 

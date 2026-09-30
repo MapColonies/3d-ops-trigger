@@ -97,6 +97,7 @@ jobManager:
 
 validation:
   percentageLimit: 10
+  basePath: ''
 
 provider: 'NFS'
 NFS:

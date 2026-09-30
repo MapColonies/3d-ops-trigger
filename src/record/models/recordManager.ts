@@ -4,16 +4,20 @@ import type { Polygon } from 'geojson';
 import type { components } from '@openapi';
 import { SERVICES } from '@common/constants';
 import type { LogContext } from '@common/interfaces';
+import { AppError } from '@common/appError';
 import { convertPolygonTo2DPolygon } from '@common/util';
 import { ValidationManager } from '../../validator/validationManager';
 import { JobnikClient } from '../../externalServices/jobnik/jobnikClient';
 import { CatalogCall } from '../../externalServices/catalog/catalogCall';
+
+const RECORD_STATUS_BEING_DELETED = 'BEING_DELETED';
 
 export type IngestionPayload = components['schemas']['ingestionPayload'];
 export type UpdatePayload = components['schemas']['updatePayload'];
 export type StatusPayload = components['schemas']['statusPayload'];
 export type JobResponse = components['schemas']['jobResponse'];
 export type AckResponse = components['schemas']['ackResponse'];
+export type ValidationResultResponse = components['schemas']['validationResultResponse'];
 
 @injectable()
 export class RecordManager {
@@ -35,14 +39,36 @@ export class RecordManager {
     const logContext = { ...this.logContext, function: this.createIngestion.name };
     this.logger.info({ msg: 'creating ingestion job', logContext, modelPath: payload.modelPath, tilesetFilename: payload.tilesetFilename });
     await this.validator.validateIngestion(payload);
+
+    const metadata = payload.metadata as Record<string, unknown>;
+    if (metadata.footprint !== undefined) {
+      metadata.footprint = convertPolygonTo2DPolygon(metadata.footprint as Polygon);
+    }
+
     return this.jobnik.createIngestionJob(payload);
+  }
+
+  public async validateIngestion(payload: IngestionPayload): Promise<ValidationResultResponse> {
+    const logContext = { ...this.logContext, function: this.validateIngestion.name };
+    this.logger.info({ msg: 'validating ingestion request', logContext, modelPath: payload.modelPath });
+    try {
+      await this.validator.validateIngestion(payload);
+      return { isValid: true };
+    } catch (err) {
+      if (err instanceof AppError) {
+        return { isValid: false, message: err.message };
+      }
+      throw err;
+    }
   }
 
   public async deleteRecord(id: string): Promise<JobResponse> {
     const logContext = { ...this.logContext, function: this.deleteRecord.name };
     this.logger.info({ msg: 'creating delete job', logContext, recordId: id });
     const record = await this.validator.validateDelete(id);
-    return this.jobnik.createDeleteJob(record);
+    const job = await this.jobnik.createDeleteJob(record);
+    await this.catalog.changeStatus(id, { productStatus: RECORD_STATUS_BEING_DELETED });
+    return job;
   }
 
   public async updateMetadata(id: string, update: UpdatePayload): Promise<AckResponse> {

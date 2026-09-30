@@ -33,6 +33,26 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/error'
+  /record/validate:
+    post:
+      operationId: validateRecord
+      tags:
+        - record
+      summary: Validate an ingestion request without creating a job
+      description: Runs the full ingestion validation and returns the result without triggering a Jobnik job.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ingestionPayload'
+      responses:
+        200:
+          description: Validation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/validationResultResponse'
   /record/{id}:
     delete:
       operationId: deleteRecord
@@ -230,3 +250,12 @@ components:
           type: string
         percentage:
           type: number
+    validationResultResponse:
+      type: object
+      required:
+        - isValid
+      properties:
+        isValid:
+          type: boolean
+        message:
+          type: string

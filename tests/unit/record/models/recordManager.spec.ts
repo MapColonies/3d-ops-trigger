@@ -46,11 +46,12 @@ describe('RecordManager', function () {
   });
 
   describe('deleteRecord', function () {
-    it('should return a job response', async function () {
+    it('should create the delete job and set the catalog status to BEING_DELETED', async function () {
       const result = await manager.deleteRecord('rec-1');
 
       expect(result.jobId).toBeTypeOf('string');
       expect(result.status).toBeTypeOf('string');
+      expect(changeStatusMock).toHaveBeenCalledWith('rec-1', { productStatus: 'BEING_DELETED' });
     });
   });
 

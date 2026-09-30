@@ -26,7 +26,8 @@
     "percentageLimit": {
       "__name": "VALIDATION_PERCENTAGE_LIMIT",
       "__format": "number"
-    }
+    },
+    "basePath": "VALIDATION_BASE_PATH"
   },
   "provider": "PROVIDER_FROM",
   "NFS": {

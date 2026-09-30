@@ -7,6 +7,7 @@ const recordRouterFactory: FactoryFunction<Router> = (dependencyContainer) => {
   const controller = dependencyContainer.resolve(RecordController);
 
   router.post('/', controller.createRecord);
+  router.post('/validate', controller.validateRecord);
   router.patch('/status/:id', controller.updateRecordStatus);
   router.delete('/:id', controller.deleteRecord);
   router.patch('/:id', controller.updateRecord);

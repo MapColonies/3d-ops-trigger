@@ -18,6 +18,7 @@ import {
   ERROR_RECORD_NOT_FOUND,
   ERROR_RECORD_BEING_DELETED,
   ERROR_EXTRACTABLE_CONFLICT,
+  ERROR_MODEL_PATH_INVALID,
 } from '@src/validator/validationManager';
 import { AppError } from '@src/common/appError';
 import type { ConfigType } from '@src/common/config';
@@ -34,7 +35,9 @@ const regionTilesetJson = readFileSync(join(__dirname, '../../helpers/tilesets/f
 const boxTilesetJson = JSON.stringify({ root: { boundingVolume: { box: [0, 0, 0, 100, 0, 0, 0, 100, 0, 0, 0, 100] } } });
 
 const lookupStub = { getClassifications: vi.fn().mockResolvedValue(['abc123']) } as unknown as LookupTablesCall;
-const configStub = { get: vi.fn().mockReturnValue(10) } as unknown as ConfigType;
+const configStub = {
+  get: vi.fn((key: string) => (key === 'validation.basePath' ? '/shared/models' : 10)),
+} as unknown as ConfigType;
 
 const ingest = (metadata: Record<string, unknown>): IngestionPayload => ({
   modelPath: '/shared/models/afula',
@@ -152,6 +155,28 @@ describe('ValidationManager', function () {
     (providerStub.fileExists as ReturnType<typeof vi.fn>).mockResolvedValueOnce(false);
 
     await expect(validator.validateIngestion(ingest(buildValidMetadata()))).rejects.toThrow(ERROR_FILE_NOT_FOUND);
+  });
+
+  it('should throw 400 when the model path is not under the agreed base path', async function () {
+    const payload = { ...ingest(buildValidMetadata()), modelPath: '/etc/passwd' };
+
+    await expect(validator.validateIngestion(payload)).rejects.toThrow(ERROR_MODEL_PATH_INVALID);
+  });
+
+  it('should throw 409 when the productId already exists in the catalog', async function () {
+    (catalogStub.findRecords as ReturnType<typeof vi.fn>).mockImplementation((query: { productId?: string; productName?: string }) =>
+      query.productId !== undefined ? [{ id: 'existing', productId: query.productId }] : []
+    );
+
+    let thrown: unknown;
+    try {
+      await validator.validateIngestion(ingest(buildValidMetadata()));
+    } catch (err) {
+      thrown = err;
+    }
+
+    expect(thrown).toBeInstanceOf(AppError);
+    expect((thrown as AppError).status).toBe(StatusCodes.CONFLICT);
   });
 
   it('should throw 400 when the footprint does not intersect the tileset model', async function () {

@@ -49,7 +49,7 @@ const providerStub = { fileExists: vi.fn().mockResolvedValue(true) };
 const validMetadata = buildValidMetadata();
 
 const validIngestionPayload = {
-  modelPath: '/shared/models/afula',
+  modelPath: '/app/models/afula',
   tilesetFilename: 'tileset.json',
   metadata: validMetadata,
 };
@@ -151,6 +151,33 @@ describe('record', function () {
 
       expect(response).toSatisfyApiSpec();
       expect(response.status).toBe(httpStatusCodes.BAD_REQUEST);
+    });
+  });
+
+  describe('POST /record/validate', function () {
+    it('should return 200 with isValid true for a valid request without creating a job', async function () {
+      const response = await requestSender.validateRecord({ requestBody: validIngestionPayload });
+
+      expect(response).toSatisfyApiSpec();
+      expect(response.status).toBe(httpStatusCodes.OK);
+
+      const body = response.body;
+
+      expect(body.isValid).toBe(true);
+    });
+
+    it('should return 200 with isValid false and a message for an invalid request', async function () {
+      const response = await requestSender.validateRecord({
+        requestBody: { ...validIngestionPayload, metadata: { ...validMetadata, productType: 'NOT_A_3D_TYPE' } },
+      });
+
+      expect(response).toSatisfyApiSpec();
+      expect(response.status).toBe(httpStatusCodes.OK);
+
+      const body = response.body;
+
+      expect(body.isValid).toBe(false);
+      expect(body.message).toBeTypeOf('string');
     });
   });
 

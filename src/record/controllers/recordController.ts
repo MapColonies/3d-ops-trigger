@@ -40,6 +40,17 @@ export class RecordController {
     }
   };
 
+  public validateRecord: TypedRequestHandlers['validateRecord'] = async (req, res, next) => {
+    const logContext = { ...this.logContext, function: this.validateRecord.name };
+    try {
+      const result = await this.manager.validateIngestion(req.body);
+      return res.status(StatusCodes.OK).json(result);
+    } catch (err) {
+      this.logger.error({ msg: 'failed to validate ingestion request', logContext, err });
+      return next(err);
+    }
+  };
+
   public deleteRecord: TypedRequestHandlers['deleteRecord'] = async (req, res, next) => {
     const logContext = { ...this.logContext, function: this.deleteRecord.name };
     const { id } = req.params;

@@ -24,6 +24,26 @@ export type paths = {
     patch?: never;
     trace?: never;
   };
+  '/record/validate': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Validate an ingestion request without creating a job
+     * @description Runs the full ingestion validation and returns the result without triggering a Jobnik job.
+     */
+    post: operations['validateRecord'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/record/{id}': {
     parameters: {
       query?: never;
@@ -115,6 +135,10 @@ export type components = {
       status: string;
       percentage?: number;
     };
+    validationResultResponse: {
+      isValid: boolean;
+      message?: string;
+    };
   };
   responses: never;
   parameters: {
@@ -158,6 +182,30 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['error'];
+        };
+      };
+    };
+  };
+  validateRecord: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ingestionPayload'];
+      };
+    };
+    responses: {
+      /** @description Validation result */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['validationResultResponse'];
         };
       };
     };

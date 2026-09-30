@@ -54,7 +54,8 @@
     }
   },
   "validation": {
-    "percentageLimit": 10
+    "percentageLimit": 10,
+    "basePath": "/app/models"
   },
   "provider": "NFS",
   "NFS": {
