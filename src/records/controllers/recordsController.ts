@@ -8,7 +8,7 @@ import type { LogContext } from '@common/interfaces';
 import { RecordManager } from '../models/recordManager';
 
 @injectable()
-export class RecordController {
+export class RecordsController {
   private readonly logContext: LogContext;
   private readonly ingestionJobCounter: Counter;
 
@@ -19,7 +19,7 @@ export class RecordController {
   ) {
     this.logContext = {
       fileName: __filename,
-      class: RecordController.name,
+      class: RecordsController.name,
     };
     this.ingestionJobCounter = new Counter({
       name: 'ingestion_jobs_created',
@@ -40,38 +40,37 @@ export class RecordController {
     }
   };
 
+  public validateRecord: TypedRequestHandlers['validateRecord'] = async (req, res, next) => {
+    const logContext = { ...this.logContext, function: this.validateRecord.name };
+    try {
+      const result = await this.manager.validateIngestion(req.body);
+      return res.status(StatusCodes.OK).json(result);
+    } catch (err) {
+      this.logger.error({ msg: 'failed to validate ingestion request', logContext, err });
+      return next(err);
+    }
+  };
+
+  public canDeleteRecord: TypedRequestHandlers['canDeleteRecord'] = async (req, res, next) => {
+    const logContext = { ...this.logContext, function: this.canDeleteRecord.name };
+    const { recordId } = req.params;
+    try {
+      const result = await this.manager.canDelete(recordId);
+      return res.status(StatusCodes.OK).json(result);
+    } catch (err) {
+      this.logger.error({ msg: 'failed to validate record deletability', logContext, err, recordId });
+      return next(err);
+    }
+  };
+
   public deleteRecord: TypedRequestHandlers['deleteRecord'] = async (req, res, next) => {
     const logContext = { ...this.logContext, function: this.deleteRecord.name };
-    const { id } = req.params;
+    const { recordId } = req.params;
     try {
-      const job = await this.manager.deleteRecord(id);
+      const job = await this.manager.deleteRecord(recordId);
       return res.status(StatusCodes.OK).json(job);
     } catch (err) {
-      this.logger.error({ msg: 'failed to create delete job', logContext, err, recordId: id });
-      return next(err);
-    }
-  };
-
-  public updateRecord: TypedRequestHandlers['updateRecord'] = (req, res, next) => {
-    const logContext = { ...this.logContext, function: this.updateRecord.name };
-    const { id } = req.params;
-    try {
-      const ack = this.manager.updateMetadata(id, req.body);
-      return res.status(StatusCodes.OK).json(ack);
-    } catch (err) {
-      this.logger.error({ msg: 'failed to update record metadata', logContext, err, recordId: id });
-      return next(err);
-    }
-  };
-
-  public updateRecordStatus: TypedRequestHandlers['updateRecordStatus'] = (req, res, next) => {
-    const logContext = { ...this.logContext, function: this.updateRecordStatus.name };
-    const { id } = req.params;
-    try {
-      const ack = this.manager.updateStatus(id, req.body);
-      return res.status(StatusCodes.OK).json(ack);
-    } catch (err) {
-      this.logger.error({ msg: 'failed to update record status', logContext, err, recordId: id });
+      this.logger.error({ msg: 'failed to create delete job', logContext, err, recordId });
       return next(err);
     }
   };

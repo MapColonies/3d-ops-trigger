@@ -80,6 +80,7 @@ server:
 
 externalServices:
   catalog: ''
+  extractable: ''
   lookupTables:
     url: ''
     subUrl: ''
@@ -96,6 +97,7 @@ jobManager:
 
 validation:
   percentageLimit: 10
+  basePath: ''
 
 provider: 'NFS'
 NFS:

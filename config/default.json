@@ -35,6 +35,7 @@
   },
   "externalServices": {
     "catalog": "http://127.0.0.1:8080",
+    "extractable": "http://127.0.0.1:8080",
     "lookupTables": {
       "url": "http://127.0.0.1:8080",
       "subUrl": "lookup-tables/lookupData"
@@ -53,7 +54,8 @@
     }
   },
   "validation": {
-    "percentageLimit": 10
+    "percentageLimit": 10,
+    "basePath": "/app/models"
   },
   "provider": "NFS",
   "NFS": {

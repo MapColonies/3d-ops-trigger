@@ -4,7 +4,7 @@
 
 import type { TypedRequestHandlers as ImportedTypedRequestHandlers } from '@map-colonies/openapi-express-types';
 export type paths = {
-  '/record': {
+  '/records': {
     parameters: {
       query?: never;
       header?: never;
@@ -14,7 +14,7 @@ export type paths = {
     get?: never;
     put?: never;
     /**
-     * Start an ingestion process flow
+     * Invoke a new model ingestion flow
      * @description Validates the request (light & fast) and creates a Jobnik ingestion job.
      */
     post: operations['createRecord'];
@@ -24,7 +24,47 @@ export type paths = {
     patch?: never;
     trace?: never;
   };
-  '/record/{id}': {
+  '/records/validate': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Invoke a new model ingestion validation
+     * @description Runs the full ingestion validation and returns the result without triggering a Jobnik job.
+     */
+    post: operations['validateRecord'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/records/canDelete/{recordId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Validate if a record can be removed
+     * @description Runs the delete validation and returns the result without creating a job.
+     */
+    get: operations['canDeleteRecord'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/records/{recordId}': {
     parameters: {
       query?: never;
       header?: never;
@@ -35,17 +75,16 @@ export type paths = {
     put?: never;
     post?: never;
     /**
-     * Start a delete process flow
+     * Delete a model by record id
      * @description Validates the record can be deleted and creates a Jobnik delete job.
      */
     delete: operations['deleteRecord'];
     options?: never;
     head?: never;
-    /** Update metadata for a record */
-    patch: operations['updateRecord'];
+    patch?: never;
     trace?: never;
   };
-  '/record/status/{id}': {
+  '/metadata/{identifier}': {
     parameters: {
       query?: never;
       header?: never;
@@ -58,8 +97,42 @@ export type paths = {
     delete?: never;
     options?: never;
     head?: never;
-    /** Update the publish/unpublish status of a record */
-    patch: operations['updateRecordStatus'];
+    /** Update metadata of a model */
+    patch: operations['updateMetadata'];
+    trace?: never;
+  };
+  '/metadata/status/{identifier}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    /** Update the publish/unpublish status of a model */
+    patch: operations['updateMetadataStatus'];
+    trace?: never;
+  };
+  '/jobStatus/{jobId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Get the status and progress of a job */
+    get: operations['getJobStatus'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
     trace?: never;
   };
 };
@@ -94,11 +167,23 @@ export type components = {
     ackResponse: {
       message: string;
     };
+    jobStatusResponse: {
+      status: string;
+      percentage?: number;
+    };
+    validationResultResponse: {
+      isValid: boolean;
+      message?: string;
+    };
   };
   responses: never;
   parameters: {
     /** @description The record identifier */
+    identifier: string;
+    /** @description The record identifier */
     recordId: string;
+    /** @description The job identifier */
+    jobId: string;
   };
   requestBodies: never;
   headers: never;
@@ -139,13 +224,60 @@ export interface operations {
       };
     };
   };
+  validateRecord: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ingestionPayload'];
+      };
+    };
+    responses: {
+      /** @description Validation result */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['validationResultResponse'];
+        };
+      };
+    };
+  };
+  canDeleteRecord: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The record identifier */
+        recordId: components['parameters']['recordId'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Validation result */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['validationResultResponse'];
+        };
+      };
+    };
+  };
   deleteRecord: {
     parameters: {
       query?: never;
       header?: never;
       path: {
         /** @description The record identifier */
-        id: components['parameters']['recordId'];
+        recordId: components['parameters']['recordId'];
       };
       cookie?: never;
     };
@@ -180,13 +312,13 @@ export interface operations {
       };
     };
   };
-  updateRecord: {
+  updateMetadata: {
     parameters: {
       query?: never;
       header?: never;
       path: {
         /** @description The record identifier */
-        id: components['parameters']['recordId'];
+        identifier: components['parameters']['identifier'];
       };
       cookie?: never;
     };
@@ -225,13 +357,13 @@ export interface operations {
       };
     };
   };
-  updateRecordStatus: {
+  updateMetadataStatus: {
     parameters: {
       query?: never;
       header?: never;
       path: {
         /** @description The record identifier */
-        id: components['parameters']['recordId'];
+        identifier: components['parameters']['identifier'];
       };
       cookie?: never;
     };
@@ -260,6 +392,38 @@ export interface operations {
         };
       };
       /** @description Record not found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['error'];
+        };
+      };
+    };
+  };
+  getJobStatus: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The job identifier */
+        jobId: components['parameters']['jobId'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Job status */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['jobStatusResponse'];
+        };
+      };
+      /** @description Job not found */
       404: {
         headers: {
           [name: string]: unknown;

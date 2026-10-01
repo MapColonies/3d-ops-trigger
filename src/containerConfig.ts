@@ -6,7 +6,9 @@ import { jsLogger } from '@map-colonies/js-logger';
 import { type InjectionObject, registerDependencies } from '@common/dependencyRegistration';
 import { SERVICES, SERVICE_NAME } from '@common/constants';
 import { getTracing } from '@common/tracing';
-import { recordRouterFactory, RECORD_ROUTER_SYMBOL } from './record/routes/recordRouter';
+import { recordsRouterFactory, RECORDS_ROUTER_SYMBOL } from './records/routes/recordsRouter';
+import { jobStatusRouterFactory, JOB_STATUS_ROUTER_SYMBOL } from './jobStatus/routes/jobStatusRouter';
+import { metadataRouterFactory, METADATA_ROUTER_SYMBOL } from './metadata/routes/metadataRouter';
 import { providerFactory } from './providers/getProvider';
 import { getConfig } from './common/config';
 
@@ -32,7 +34,9 @@ export const registerExternalValues = async (options?: RegisterOptions): Promise
     { token: SERVICES.TRACER, provider: { useValue: tracer } },
     { token: SERVICES.METRICS, provider: { useValue: metricsRegistry } },
     { token: SERVICES.PROVIDER, provider: { useFactory: providerFactory } },
-    { token: RECORD_ROUTER_SYMBOL, provider: { useFactory: recordRouterFactory } },
+    { token: RECORDS_ROUTER_SYMBOL, provider: { useFactory: recordsRouterFactory } },
+    { token: JOB_STATUS_ROUTER_SYMBOL, provider: { useFactory: jobStatusRouterFactory } },
+    { token: METADATA_ROUTER_SYMBOL, provider: { useFactory: metadataRouterFactory } },
     {
       token: 'onSignal',
       provider: {

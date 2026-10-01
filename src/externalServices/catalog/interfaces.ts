@@ -17,3 +17,9 @@ export interface IFindRecordsPayload {
   classification?: string;
   productStatus?: string;
 }
+
+export type CatalogUpdatePayload = Record<string, unknown>;
+
+export interface CatalogStatusPayload {
+  productStatus: string;
+}

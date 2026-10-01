@@ -32,6 +32,7 @@ data:
   npm_config_cache: /tmp/
   {{- with .Values.externalServices }}
   CATALOG_URL: {{ .catalog | quote }}
+  EXTRACTABLE_URL: {{ .extractable | quote }}
   {{- with .lookupTables }}
   LOOKUP_TABLES_URL: {{ .url | quote }}
   LOOKUP_TABLES_SUB_URL: {{ .subUrl | quote }}
@@ -46,6 +47,7 @@ data:
   TASK_DELETE_TYPE: {{ .delete.taskType | quote }}
   {{- end }}
   VALIDATION_PERCENTAGE_LIMIT: {{ .Values.validation.percentageLimit | quote }}
+  VALIDATION_BASE_PATH: {{ .Values.validation.basePath | quote }}
   PROVIDER_FROM: {{ .Values.provider | quote }}
   {{- if eq .Values.provider "NFS" }}
   PV_SOURCE_PATH: {{ .Values.NFS.pvPath | quote }}

@@ -9,6 +9,7 @@ interface LookupTablesConfig {
 interface ExternalServicesConfig {
   lookupTables: LookupTablesConfig;
   catalog: string;
+  extractable: string;
 }
 
 interface JobManagerConfig {
@@ -26,6 +27,7 @@ interface JobManagerConfig {
 
 interface ValidationConfig {
   percentageLimit: number;
+  basePath: string;
 }
 
 interface NFSConfig {
@@ -70,9 +72,10 @@ const opsTriggerConfigSchema = {
         provider: { type: 'string', enum: ['NFS', 'S3'] },
         validation: {
           type: 'object',
-          required: ['percentageLimit'],
+          required: ['percentageLimit', 'basePath'],
           properties: {
             percentageLimit: { type: 'number' },
+            basePath: { type: 'string' },
           },
         },
         // eslint-disable-next-line @typescript-eslint/naming-convention
@@ -98,7 +101,7 @@ const opsTriggerConfigSchema = {
         },
         externalServices: {
           type: 'object',
-          required: ['lookupTables', 'catalog'],
+          required: ['lookupTables', 'catalog', 'extractable'],
           properties: {
             lookupTables: {
               type: 'object',
@@ -109,6 +112,7 @@ const opsTriggerConfigSchema = {
               },
             },
             catalog: { type: 'string' },
+            extractable: { type: 'string' },
           },
         },
         jobManager: {

@@ -1,6 +1,7 @@
 {
   "externalServices": {
     "catalog": "CATALOG_URL",
+    "extractable": "EXTRACTABLE_URL",
     "lookupTables": {
       "url": "LOOKUP_TABLES_URL",
       "subUrl": "LOOKUP_TABLES_SUB_URL"
@@ -25,7 +26,8 @@
     "percentageLimit": {
       "__name": "VALIDATION_PERCENTAGE_LIMIT",
       "__format": "number"
-    }
+    },
+    "basePath": "VALIDATION_BASE_PATH"
   },
   "provider": "PROVIDER_FROM",
   "NFS": {

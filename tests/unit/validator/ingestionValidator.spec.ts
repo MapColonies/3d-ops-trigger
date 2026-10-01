@@ -3,19 +3,18 @@ import { join } from 'node:path';
 import { jsLogger } from '@map-colonies/js-logger';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { StatusCodes } from 'http-status-codes';
+import { IngestionValidator } from '@src/validator/ingestionValidator';
+import { TilesetValidator } from '@src/validator/tilesetValidator';
 import {
-  ValidationManager,
   ERROR_METADATA_DATE,
   ERROR_METADATA_FOOTPRINT,
   ERROR_METADATA_MISSING_DATE,
   ERROR_METADATA_INVALID_DATE,
-  ERROR_DELETE_RECORD_NOT_FOUND,
-  ERROR_DELETE_PRODUCT_TYPE,
-  ERROR_DELETE_STATUS,
   ERROR_FILE_NOT_FOUND,
   ERROR_PRODUCT_NAME_IN_FLIGHT,
   ERROR_FOOTPRINT_FAR_FROM_MODEL,
-} from '@src/validator/validationManager';
+  ERROR_MODEL_PATH_INVALID,
+} from '@src/validator/errors';
 import { AppError } from '@src/common/appError';
 import type { ConfigType } from '@src/common/config';
 import type { LookupTablesCall } from '@src/externalServices/lookupTables/lookupTablesCall';
@@ -23,14 +22,16 @@ import type { CatalogCall } from '@src/externalServices/catalog/catalogCall';
 import type { JobnikClient } from '@src/externalServices/jobnik/jobnikClient';
 import type { TilesetReader } from '@src/tileset/tilesetReader';
 import type { Provider } from '@src/providers/interfaces';
-import type { IngestionPayload } from '@src/record/models/recordManager';
+import type { IngestionPayload } from '@src/common/interfaces';
 import { buildValidMetadata } from '@tests/helpers/metadata';
 
 const regionTilesetJson = readFileSync(join(__dirname, '../../helpers/tilesets/folder/tileset.json'), 'utf-8');
 const boxTilesetJson = JSON.stringify({ root: { boundingVolume: { box: [0, 0, 0, 100, 0, 0, 0, 100, 0, 0, 0, 100] } } });
 
 const lookupStub = { getClassifications: vi.fn().mockResolvedValue(['abc123']) } as unknown as LookupTablesCall;
-const configStub = { get: vi.fn().mockReturnValue(10) } as unknown as ConfigType;
+const configStub = {
+  get: vi.fn((key: string) => (key === 'validation.basePath' ? '/shared/models' : 10)),
+} as unknown as ConfigType;
 
 const ingest = (metadata: Record<string, unknown>): IngestionPayload => ({
   modelPath: '/shared/models/afula',
@@ -38,27 +39,23 @@ const ingest = (metadata: Record<string, unknown>): IngestionPayload => ({
   metadata,
 });
 
-describe('ValidationManager', function () {
-  let validator: ValidationManager;
+describe('IngestionValidator', function () {
+  let validator: IngestionValidator;
   let catalogStub: CatalogCall;
   let jobnikStub: JobnikClient;
   let tilesetReaderStub: TilesetReader;
   let providerStub: Provider;
 
   beforeEach(async function () {
-    catalogStub = { findRecords: vi.fn().mockResolvedValue([]) } as unknown as CatalogCall;
+    catalogStub = {
+      findRecords: vi.fn().mockResolvedValue([]),
+    } as unknown as CatalogCall;
     jobnikStub = { hasInFlightIngestionJob: vi.fn().mockResolvedValue(false) } as unknown as JobnikClient;
     tilesetReaderStub = { readTilesetJson: vi.fn().mockResolvedValue(regionTilesetJson) } as unknown as TilesetReader;
     providerStub = { fileExists: vi.fn().mockResolvedValue(true) };
-    validator = new ValidationManager(
-      configStub,
-      await jsLogger({ enabled: false }),
-      lookupStub,
-      catalogStub,
-      jobnikStub,
-      tilesetReaderStub,
-      providerStub
-    );
+    const logger = await jsLogger({ enabled: false });
+    const tilesetValidator = new TilesetValidator(configStub, logger, tilesetReaderStub);
+    validator = new IngestionValidator(configStub, logger, lookupStub, catalogStub, jobnikStub, providerStub, tilesetValidator);
   });
 
   it('should pass a fully valid ingestion payload', async function () {
@@ -144,6 +141,28 @@ describe('ValidationManager', function () {
     await expect(validator.validateIngestion(ingest(buildValidMetadata()))).rejects.toThrow(ERROR_FILE_NOT_FOUND);
   });
 
+  it('should throw 400 when the model path is not under the agreed base path', async function () {
+    const payload = { ...ingest(buildValidMetadata()), modelPath: '/etc/passwd' };
+
+    await expect(validator.validateIngestion(payload)).rejects.toThrow(ERROR_MODEL_PATH_INVALID);
+  });
+
+  it('should throw 409 when the productId already exists in the catalog', async function () {
+    (catalogStub.findRecords as ReturnType<typeof vi.fn>).mockImplementation((query: { productId?: string; productName?: string }) =>
+      query.productId !== undefined ? [{ id: 'existing', productId: query.productId }] : []
+    );
+
+    let thrown: unknown;
+    try {
+      await validator.validateIngestion(ingest(buildValidMetadata()));
+    } catch (err) {
+      thrown = err;
+    }
+
+    expect(thrown).toBeInstanceOf(AppError);
+    expect((thrown as AppError).status).toBe(StatusCodes.CONFLICT);
+  });
+
   it('should throw 400 when the footprint does not intersect the tileset model', async function () {
     const metadata = buildValidMetadata();
     metadata.footprint = {
@@ -201,36 +220,5 @@ describe('ValidationManager', function () {
 
     expect(thrown).toBeInstanceOf(AppError);
     expect((thrown as AppError).status).toBe(StatusCodes.BAD_REQUEST);
-  });
-
-  describe('validateDelete', function () {
-    it('should return the record when it is deletable', async function () {
-      const record = { id: 'rec-1', productType: '3DPhotoRealistic', productStatus: 'UNPUBLISHED' };
-      (catalogStub.findRecords as ReturnType<typeof vi.fn>).mockResolvedValueOnce([record]);
-
-      await expect(validator.validateDelete('rec-1')).resolves.toEqual(record);
-    });
-
-    it('should throw when the record is not found', async function () {
-      (catalogStub.findRecords as ReturnType<typeof vi.fn>).mockResolvedValueOnce([]);
-
-      await expect(validator.validateDelete('missing')).rejects.toThrow(ERROR_DELETE_RECORD_NOT_FOUND);
-    });
-
-    it('should throw when the productType is blocked', async function () {
-      (catalogStub.findRecords as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
-        { id: 'rec-1', productType: 'QuantizedMeshDTMBest', productStatus: 'UNPUBLISHED' },
-      ]);
-
-      await expect(validator.validateDelete('rec-1')).rejects.toThrow(ERROR_DELETE_PRODUCT_TYPE);
-    });
-
-    it('should throw when the record is not unpublished', async function () {
-      (catalogStub.findRecords as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
-        { id: 'rec-1', productType: '3DPhotoRealistic', productStatus: 'PUBLISHED' },
-      ]);
-
-      await expect(validator.validateDelete('rec-1')).rejects.toThrow(ERROR_DELETE_STATUS);
-    });
   });
 });

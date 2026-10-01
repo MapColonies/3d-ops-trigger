@@ -3,12 +3,12 @@ import { StatusCodes } from 'http-status-codes';
 import type { Logger } from '@map-colonies/js-logger';
 import type { Registry } from 'prom-client';
 import { JobnikSDK } from '@map-colonies/jobnik-sdk';
+import type { JobId } from '@map-colonies/jobnik-sdk';
 import { IN_FLIGHT_JOB_STATUSES, SERVICES, STAGE_TYPES } from '@common/constants';
 import { is3tz } from '@common/util';
 import { AppError } from '@common/appError';
 import type { ConfigType, JobManagerConfig } from '@common/config';
-import type { LogContext } from '@common/interfaces';
-import type { IngestionPayload, JobResponse } from '../../record/models/recordManager';
+import type { IngestionPayload, JobResponse, JobStatusResponse, LogContext } from '@common/interfaces';
 import type { Record3D } from '../catalog/interfaces';
 
 interface StageDescriptor {
@@ -69,13 +69,27 @@ export class JobnikClient {
     }
   }
 
-  public async createIngestionJob(payload: IngestionPayload): Promise<JobResponse> {
+  public async getJobStatus(jobId: string): Promise<JobStatusResponse> {
+    const logContext = { ...this.logContext, function: this.getJobStatus.name };
+    const { data, error, response } = await this.apiClient.GET('/v1/jobs/{jobId}', { params: { path: { jobId: jobId as JobId } } });
+    if (error !== undefined) {
+      if (response.status === StatusCodes.NOT_FOUND.valueOf()) {
+        throw new AppError('badRequest', StatusCodes.NOT_FOUND, `job ${jobId} was not found`, true);
+      }
+      this.logger.error({ msg: 'failed querying Jobnik for job status', logContext, jobId, err: error });
+      throw new AppError('jobnik', StatusCodes.INTERNAL_SERVER_ERROR, 'failed querying Jobnik for job status', false);
+    }
+
+    return { status: data.status, percentage: data.percentage };
+  }
+
+  public async createIngestionJob(payload: IngestionPayload, modelId: string): Promise<JobResponse> {
     const logContext = { ...this.logContext, function: this.createIngestionJob.name };
     const isArchive = is3tz(payload.modelPath);
 
     const job = await this.producer.createJob({
       name: this.jobManager.ingestion.jobType,
-      data: { modelPath: payload.modelPath, tilesetFilename: payload.tilesetFilename, metadata: payload.metadata },
+      data: { modelId, modelPath: payload.modelPath, tilesetFilename: payload.tilesetFilename, metadata: payload.metadata },
     });
 
     const stages: StageDescriptor[] = [

@@ -10,7 +10,9 @@ import { collectMetricsExpressMiddleware } from '@map-colonies/prometheus';
 import { Registry } from 'prom-client';
 import type { ConfigType } from '@common/config';
 import { SERVICES } from '@common/constants';
-import { RECORD_ROUTER_SYMBOL } from './record/routes/recordRouter';
+import { RECORDS_ROUTER_SYMBOL } from './records/routes/recordsRouter';
+import { JOB_STATUS_ROUTER_SYMBOL } from './jobStatus/routes/jobStatusRouter';
+import { METADATA_ROUTER_SYMBOL } from './metadata/routes/metadataRouter';
 
 @injectable()
 export class ServerBuilder {
@@ -20,7 +22,9 @@ export class ServerBuilder {
     @inject(SERVICES.CONFIG) private readonly config: ConfigType,
     @inject(SERVICES.LOGGER) private readonly logger: Logger,
     @inject(SERVICES.METRICS) private readonly metricsRegistry: Registry,
-    @inject(RECORD_ROUTER_SYMBOL) private readonly recordRouter: Router
+    @inject(RECORDS_ROUTER_SYMBOL) private readonly recordsRouter: Router,
+    @inject(JOB_STATUS_ROUTER_SYMBOL) private readonly jobStatusRouter: Router,
+    @inject(METADATA_ROUTER_SYMBOL) private readonly metadataRouter: Router
   ) {
     this.serverInstance = express();
   }
@@ -43,7 +47,9 @@ export class ServerBuilder {
   }
 
   private buildRoutes(): void {
-    this.serverInstance.use('/record', this.recordRouter);
+    this.serverInstance.use('/records', this.recordsRouter);
+    this.serverInstance.use('/jobStatus', this.jobStatusRouter);
+    this.serverInstance.use('/metadata', this.metadataRouter);
     this.buildDocsRoutes();
   }
 
