@@ -1,17 +1,21 @@
 import { jsLogger } from '@map-colonies/js-logger';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { RecordManager, type IngestionPayload } from '@src/records/models/recordManager';
-import type { ValidationManager } from '@src/validator/validationManager';
+import { RecordManager } from '@src/records/models/recordManager';
+import type { IngestionPayload } from '@src/common/interfaces';
+import type { IngestionValidator } from '@src/validator/ingestionValidator';
+import type { MetadataValidator } from '@src/validator/metadataValidator';
 import type { JobnikClient } from '@src/externalServices/jobnik/jobnikClient';
 import type { CatalogCall } from '@src/externalServices/catalog/catalogCall';
 
-const noopValidator = {
+const ingestionValidatorStub = {
   validateIngestion: vi.fn().mockResolvedValue(undefined),
+} as unknown as IngestionValidator;
+const metadataValidatorStub = {
   validateDelete: vi.fn().mockResolvedValue({ id: 'rec-1', productName: 'afula' }),
   validateUpdate: vi.fn().mockResolvedValue({ id: 'rec-1', productName: 'afula' }),
   validateStatusChange: vi.fn().mockResolvedValue({ id: 'rec-1', productName: 'afula' }),
   ensureRecordAbsentFromExtractable: vi.fn().mockResolvedValue(undefined),
-} as unknown as ValidationManager;
+} as unknown as MetadataValidator;
 const jobnikStub = {
   createIngestionJob: vi.fn().mockResolvedValue({ jobId: 'job-1', status: 'PENDING' }),
   createDeleteJob: vi.fn().mockResolvedValue({ jobId: 'del-1', status: 'PENDING' }),
@@ -27,7 +31,7 @@ describe('RecordManager', function () {
   let manager: RecordManager;
 
   beforeEach(async function () {
-    manager = new RecordManager(await jsLogger({ enabled: false }), noopValidator, jobnikStub, catalogStub);
+    manager = new RecordManager(await jsLogger({ enabled: false }), ingestionValidatorStub, metadataValidatorStub, jobnikStub, catalogStub);
   });
 
   describe('createIngestion', function () {

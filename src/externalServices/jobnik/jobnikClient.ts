@@ -8,8 +8,7 @@ import { IN_FLIGHT_JOB_STATUSES, SERVICES, STAGE_TYPES } from '@common/constants
 import { is3tz } from '@common/util';
 import { AppError } from '@common/appError';
 import type { ConfigType, JobManagerConfig } from '@common/config';
-import type { LogContext } from '@common/interfaces';
-import type { IngestionPayload, JobResponse } from '../../records/models/recordManager';
+import type { IngestionPayload, JobResponse, JobStatusResponse, LogContext } from '@common/interfaces';
 import type { Record3D } from '../catalog/interfaces';
 
 interface StageDescriptor {
@@ -17,11 +16,6 @@ interface StageDescriptor {
   data: Record<string, unknown>;
   task?: Record<string, unknown>;
   only3tz?: boolean;
-}
-
-export interface JobStatusResponse {
-  status: string;
-  percentage?: number;
 }
 
 @singleton()

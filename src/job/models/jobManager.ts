@@ -1,11 +1,8 @@
 import type { Logger } from '@map-colonies/js-logger';
 import { inject, injectable } from 'tsyringe';
-import type { components } from '@openapi';
 import { SERVICES } from '@common/constants';
-import type { LogContext } from '@common/interfaces';
+import type { JobStatusResponse, LogContext } from '@common/interfaces';
 import { JobnikClient } from '../../externalServices/jobnik/jobnikClient';
-
-export type JobStatusResponse = components['schemas']['jobStatusResponse'];
 
 @injectable()
 export class JobManager {
