@@ -7,11 +7,17 @@ import type { paths, operations } from '@openapi';
 import { getApp } from '@src/app';
 import { SERVICES } from '@common/constants';
 import { initConfig } from '@src/common/config';
+import type { IngestionPayload } from '@src/record/models/recordManager';
 
-const validIngestionPayload = {
-  modelPath: '/shared/models/afula',
-  tilesetFilename: 'tileset.json',
-  metadata: { productName: 'afula', productType: 'PHOTO_REALISTIC' },
+const validIngestionPayload: IngestionPayload = {
+  modelPath: '/shared/models/afula/data/tileset.json',
+  productShapefilePath: '/shared/models/afula/shape/Product.shp',
+  metadataShapefilePath: '/shared/models/afula/shape/ShapeMetadata.shp',
+  productName: 'afula',
+  productId: 'afula-1',
+  productType: '3DPhotoRealistic',
+  classification: '4',
+  region: ['israel'],
 };
 
 describe('record', function () {
@@ -47,8 +53,8 @@ describe('record', function () {
 
     it('should return 400 when a required field is missing', async function () {
       const response = await requestSender.createRecord({
-        // @ts-expect-error intentionally invalid: missing tilesetFilename and metadata
-        requestBody: { modelPath: '/shared/models/afula' },
+        // @ts-expect-error intentionally invalid: missing shapefile paths and metadata fields
+        requestBody: { modelPath: '/shared/models/afula/data/tileset.json' },
       });
 
       expect(response).toSatisfyApiSpec();

@@ -23,7 +23,7 @@ export class RecordManager {
 
   public createIngestion(payload: IngestionPayload): JobResponse {
     const logContext = { ...this.logContext, function: this.createIngestion.name };
-    this.logger.info({ msg: 'creating ingestion job', logContext, modelPath: payload.modelPath, tilesetFilename: payload.tilesetFilename });
+    this.logger.info({ msg: 'creating ingestion job', logContext, productId: payload.productId, modelPath: payload.modelPath });
     return { jobId: 'stub-ingestion-job-id', status: 'PENDING' };
   }
 
