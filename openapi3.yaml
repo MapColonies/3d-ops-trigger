@@ -1,7 +1,7 @@
 openapi: 3.0.1
 info:
-  title: service-name
-  description: basic template for map colonies service
+  title: 3d-ops-trigger
+  description: Entry point for 3D operations — validates requests and triggers Jobnik jobs
   version: 1.0.0
   license:
     name: MIT
