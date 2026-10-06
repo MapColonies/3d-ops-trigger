@@ -151,8 +151,6 @@ components:
         - modelPath
         - productShapefilePath
         - metadataShapefilePath
-        - productName
-        - productId
         - productType
         - classification
         - region
@@ -169,13 +167,6 @@ components:
           type: string
           description: Path to the parts metadata shapefile (shape/ShapeMetadata.shp)
           example: /shared/models/afula/shape/ShapeMetadata.shp
-        productName:
-          type: string
-          maxLength: 120
-          description: Pre-filled from the prodName shapefile attribute, user editable
-        productId:
-          type: string
-          description: Deterministic id derived from the prodID attribute and the storage id
         productType:
           type: string
           enum:

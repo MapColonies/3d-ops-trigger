@@ -18,8 +18,6 @@ describe('RecordManager', function () {
         modelPath: '/shared/models/afula/data/tileset.json',
         productShapefilePath: '/shared/models/afula/shape/Product.shp',
         metadataShapefilePath: '/shared/models/afula/shape/ShapeMetadata.shp',
-        productName: 'afula',
-        productId: 'afula-1',
         productType: '3DPhotoRealistic',
         classification: '4',
         region: ['israel'],
