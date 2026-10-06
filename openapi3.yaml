@@ -21,13 +21,13 @@ paths:
             schema:
               $ref: '#/components/schemas/ingestionPayload'
       responses:
-        201:
+        '201':
           description: Ingestion job created
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/jobResponse'
-        400:
+        '400':
           description: Bad Request
           content:
             application/json:
@@ -43,19 +43,19 @@ paths:
       parameters:
         - $ref: '#/components/parameters/recordId'
       responses:
-        200:
+        '200':
           description: Delete job created
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/jobResponse'
-        400:
+        '400':
           description: Bad Request
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/error'
-        404:
+        '404':
           description: Record not found
           content:
             application/json:
@@ -75,19 +75,19 @@ paths:
             schema:
               $ref: '#/components/schemas/updatePayload'
       responses:
-        200:
+        '200':
           description: Metadata updated
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ackResponse'
-        400:
+        '400':
           description: Bad Request
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/error'
-        404:
+        '404':
           description: Record not found
           content:
             application/json:
@@ -108,19 +108,19 @@ paths:
             schema:
               $ref: '#/components/schemas/statusPayload'
       responses:
-        200:
+        '200':
           description: Status updated
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ackResponse'
-        400:
+        '400':
           description: Bad Request
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/error'
-        404:
+        '404':
           description: Record not found
           content:
             application/json:
@@ -159,7 +159,9 @@ components:
       properties:
         modelPath:
           type: string
-          description: Path to the model inside the data/ folder - a tileset.json (3D Tiles) or a .3tz file
+          description: >-
+            Path to the model inside the data/ folder - a tileset.json (3D
+            Tiles) or a .3tz file
           example: /shared/models/afula/data/tileset.json
         productShapefilePath:
           type: string
@@ -175,7 +177,9 @@ components:
           description: Pre-filled from the prodName shapefile attribute, user editable
         productId:
           type: string
-          description: Deterministic id derived from the prodID attribute and the storage id
+          description: >-
+            Deterministic id derived from the prodID attribute and the storage
+            id
         productType:
           type: string
           enum:
@@ -197,7 +201,7 @@ components:
             type: string
         classification:
           type: string
-          pattern: '^[a-zA-Z0-9]+$'
+          pattern: ^[a-zA-Z0-9]+$
         keywords:
           type: string
       additionalProperties: false
