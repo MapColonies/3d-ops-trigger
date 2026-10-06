@@ -149,19 +149,58 @@ components:
       type: object
       required:
         - modelPath
-        - tilesetFilename
-        - metadata
+        - productShapefilePath
+        - metadataShapefilePath
+        - productName
+        - productId
+        - productType
+        - classification
+        - region
       properties:
         modelPath:
           type: string
-          description: Path on the shared storage to the 3DTiles folder or 3TZ archive
-        tilesetFilename:
+          description: Path to the model inside the data/ folder - a tileset.json (3D Tiles) or a .3tz file
+          example: /shared/models/afula/data/tileset.json
+        productShapefilePath:
           type: string
-          description: The tileset entry name (e.g. tileset.json)
-        metadata:
-          type: object
-          description: 3D record metadata (business validation applied downstream)
-          additionalProperties: true
+          description: Path to the footprint shapefile (shape/Product.shp)
+          example: /shared/models/afula/shape/Product.shp
+        metadataShapefilePath:
+          type: string
+          description: Path to the parts metadata shapefile (shape/ShapeMetadata.shp)
+          example: /shared/models/afula/shape/ShapeMetadata.shp
+        productName:
+          type: string
+          maxLength: 120
+          description: Pre-filled from the prodName shapefile attribute, user editable
+        productId:
+          type: string
+          description: Deterministic id derived from the prodID attribute and the storage id
+        productType:
+          type: string
+          enum:
+            - 3DPhotoRealistic
+            - 3DPhotoRealisticBest
+            - 3DSemantic
+            - 3DSemanticMesh
+            - QuantizedMeshDTMBest
+            - QuantizedMeshDSMBest
+            - 3DPointCloud
+        productSubType:
+          type: string
+        description:
+          type: string
+        region:
+          type: array
+          minItems: 1
+          items:
+            type: string
+        classification:
+          type: string
+          pattern: '^[a-zA-Z0-9]+$'
+        keywords:
+          type: string
+      additionalProperties: false
     updatePayload:
       type: object
       description: Partial metadata fields to update

@@ -27,8 +27,8 @@ export class RecordManager {
 
   public async createIngestion(payload: IngestionPayload): Promise<JobResponse> {
     const logContext = { ...this.logContext, function: this.createIngestion.name };
-    this.logger.info({ msg: 'creating ingestion job', logContext, modelPath: payload.modelPath, tilesetFilename: payload.tilesetFilename });
-    await this.validator.validateIngestion(payload.metadata);
+    this.logger.info({ msg: 'creating ingestion job', logContext, productId: payload.productId, modelPath: payload.modelPath });
+    await this.validator.validateIngestion(payload);
     return { jobId: 'stub-ingestion-job-id', status: 'PENDING' };
   }
 

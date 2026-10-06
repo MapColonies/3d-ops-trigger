@@ -6,20 +6,26 @@ import { createRequestSender, type RequestSender } from '@map-colonies/openapi-s
 import type { paths, operations } from '@openapi';
 import { getApp } from '@src/app';
 import { SERVICES } from '@common/constants';
+import type { InjectionObject } from '@common/dependencyRegistration';
 import { initConfig } from '@src/common/config';
+import type { IngestionPayload } from '@src/record/models/recordManager';
 import { LookupTablesCall } from '@src/externalServices/lookupTables/lookupTablesCall';
 import { CatalogCall } from '@src/externalServices/catalog/catalogCall';
-import { buildValidMetadata } from '@tests/helpers/metadata';
+import { ValidationManager } from '@src/validator/validationManager';
 
-const lookupStub = { getClassifications: vi.fn().mockResolvedValue(['abc123']) } as unknown as LookupTablesCall;
+const lookupStub = { getClassifications: vi.fn().mockResolvedValue(['4']) } as unknown as LookupTablesCall;
 const catalogStub = { findRecords: vi.fn().mockResolvedValue([]) } as unknown as CatalogCall;
+const noopValidator = { validateIngestion: vi.fn().mockResolvedValue(undefined) } as unknown as ValidationManager;
 
-const validMetadata = buildValidMetadata();
-
-const validIngestionPayload = {
-  modelPath: '/shared/models/afula',
-  tilesetFilename: 'tileset.json',
-  metadata: validMetadata,
+const validIngestionPayload: IngestionPayload = {
+  modelPath: '/shared/models/afula/data/tileset.json',
+  productShapefilePath: '/shared/models/afula/shape/Product.shp',
+  metadataShapefilePath: '/shared/models/afula/shape/ShapeMetadata.shp',
+  productName: 'afula',
+  productId: 'afula-1',
+  productType: '3DPhotoRealistic',
+  classification: '4',
+  region: ['israel'],
 };
 
 describe('record', function () {
@@ -29,17 +35,22 @@ describe('record', function () {
     await initConfig(true);
   });
 
-  beforeEach(async function () {
+  const buildRequestSender = async (extraOverrides: InjectionObject<unknown>[]): Promise<RequestSender<paths, operations>> => {
     const [app] = await getApp({
       override: [
         { token: SERVICES.LOGGER, provider: { useValue: await jsLogger({ enabled: false }) } },
         { token: SERVICES.TRACER, provider: { useValue: trace.getTracer('testTracer') } },
         { token: LookupTablesCall, provider: { useValue: lookupStub } },
         { token: CatalogCall, provider: { useValue: catalogStub } },
+        ...extraOverrides,
       ],
       useChild: true,
     });
-    requestSender = await createRequestSender<paths, operations>('openapi3.yaml', app);
+    return createRequestSender<paths, operations>('openapi3.yaml', app);
+  };
+
+  beforeEach(async function () {
+    requestSender = await buildRequestSender([{ token: ValidationManager, provider: { useValue: noopValidator } }]);
   });
 
   describe('POST /record', function () {
@@ -57,8 +68,8 @@ describe('record', function () {
 
     it('should return 400 when a required field is missing', async function () {
       const response = await requestSender.createRecord({
-        // @ts-expect-error intentionally invalid: missing tilesetFilename and metadata
-        requestBody: { modelPath: '/shared/models/afula' },
+        // @ts-expect-error intentionally invalid: missing shapefile paths and metadata fields
+        requestBody: { modelPath: '/shared/models/afula/data/tileset.json' },
       });
 
       expect(response).toSatisfyApiSpec();
@@ -66,8 +77,9 @@ describe('record', function () {
     });
 
     it('should return 400 when metadata fails business validation', async function () {
-      const response = await requestSender.createRecord({
-        requestBody: { ...validIngestionPayload, metadata: { ...validMetadata, productType: 'NOT_A_3D_TYPE' } },
+      const realValidatorSender = await buildRequestSender([]);
+      const response = await realValidatorSender.createRecord({
+        requestBody: validIngestionPayload,
       });
 
       expect(response).toSatisfyApiSpec();

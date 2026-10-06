@@ -8,7 +8,7 @@ global:
 mclabels:
   component: backend
   partOf: 3d
-  owner: common
+  owner: 3d
   prometheus:
     enabled: true
 
@@ -22,7 +22,7 @@ nameOverride: ""
 fullnameOverride: ""
 
 configManagement:
-  offlineMode: false
+  offlineMode: true
   name: '3d-ops-trigger'
   version: 'latest'
   serverUrl: 'http://localhost:8080/api'

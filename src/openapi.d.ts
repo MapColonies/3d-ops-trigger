@@ -70,14 +70,39 @@ export type components = {
       message: string;
     };
     ingestionPayload: {
-      /** @description Path on the shared storage to the 3DTiles folder or 3TZ archive */
+      /**
+       * @description Path to the model inside the data/ folder - a tileset.json (3D Tiles) or a .3tz file
+       * @example /shared/models/afula/data/tileset.json
+       */
       modelPath: string;
-      /** @description The tileset entry name (e.g. tileset.json) */
-      tilesetFilename: string;
-      /** @description 3D record metadata (business validation applied downstream) */
-      metadata: {
-        [key: string]: unknown;
-      };
+      /**
+       * @description Path to the footprint shapefile (shape/Product.shp)
+       * @example /shared/models/afula/shape/Product.shp
+       */
+      productShapefilePath: string;
+      /**
+       * @description Path to the parts metadata shapefile (shape/ShapeMetadata.shp)
+       * @example /shared/models/afula/shape/ShapeMetadata.shp
+       */
+      metadataShapefilePath: string;
+      /** @description Pre-filled from the prodName shapefile attribute, user editable */
+      productName: string;
+      /** @description Deterministic id derived from the prodID attribute and the storage id */
+      productId: string;
+      /** @enum {string} */
+      productType:
+        | '3DPhotoRealistic'
+        | '3DPhotoRealisticBest'
+        | '3DSemantic'
+        | '3DSemanticMesh'
+        | 'QuantizedMeshDTMBest'
+        | 'QuantizedMeshDSMBest'
+        | '3DPointCloud';
+      productSubType?: string;
+      description?: string;
+      region: string[];
+      classification: string;
+      keywords?: string;
     };
     /** @description Partial metadata fields to update */
     updatePayload: {

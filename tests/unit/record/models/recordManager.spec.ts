@@ -15,9 +15,14 @@ describe('RecordManager', function () {
   describe('createIngestion', function () {
     it('should return a job response with a jobId and status', async function () {
       const payload: IngestionPayload = {
-        modelPath: '/shared/models/afula',
-        tilesetFilename: 'tileset.json',
-        metadata: { productName: 'afula' },
+        modelPath: '/shared/models/afula/data/tileset.json',
+        productShapefilePath: '/shared/models/afula/shape/Product.shp',
+        metadataShapefilePath: '/shared/models/afula/shape/ShapeMetadata.shp',
+        productName: 'afula',
+        productId: 'afula-1',
+        productType: '3DPhotoRealistic',
+        classification: '4',
+        region: ['israel'],
       };
 
       const result = await manager.createIngestion(payload);
