@@ -79,7 +79,7 @@ server:
   requestPayloadLimit: 1mb
 
 externalServices:
-  catalog: ''
+  catalogUrl: ''
   lookupTables:
     url: ''
     subUrl: ''

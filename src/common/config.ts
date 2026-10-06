@@ -8,7 +8,7 @@ interface LookupTablesConfig {
 
 interface ExternalServicesConfig {
   lookupTables: LookupTablesConfig;
-  catalog: string;
+  catalogUrl: string;
 }
 
 type OpsTriggerConfigType = commonBoilerplateV3Type & { externalServices: ExternalServicesConfig };
@@ -26,7 +26,7 @@ const opsTriggerConfigSchema = {
       properties: {
         externalServices: {
           type: 'object',
-          required: ['lookupTables', 'catalog'],
+          required: ['lookupTables', 'catalogUrl'],
           properties: {
             lookupTables: {
               type: 'object',
@@ -36,7 +36,7 @@ const opsTriggerConfigSchema = {
                 subUrl: { type: 'string' },
               },
             },
-            catalog: { type: 'string' },
+            catalogUrl: { type: 'string' },
           },
         },
       },

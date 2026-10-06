@@ -2,41 +2,40 @@ import axios from 'axios';
 import { inject, injectable } from 'tsyringe';
 import type { Logger } from '@map-colonies/js-logger';
 import { StatusCodes } from 'http-status-codes';
+import { AppError, type LogContext, type IFindRecordsPayload, type Record3D } from '@map-colonies/3d-shared';
 import { SERVICES } from '@common/constants';
-import { AppError } from '@common/appError';
 import type { ConfigType } from '@common/config';
-import type { LogContext } from '@common/interfaces';
-import type { IFindRecordsPayload, Record3D } from './interfaces';
 
 @injectable()
-export class CatalogCall {
+export class CatalogClient {
   private readonly logContext: LogContext;
-  private readonly catalog: string;
+  private readonly catalogUrl: string;
 
   public constructor(
     @inject(SERVICES.CONFIG) private readonly config: ConfigType,
     @inject(SERVICES.LOGGER) private readonly logger: Logger
   ) {
-    this.catalog = this.config.get('externalServices.catalog');
+    this.catalogUrl = this.config.get('externalServices.catalogUrl');
     this.logContext = {
       fileName: __filename,
-      class: CatalogCall.name,
+      class: CatalogClient.name,
     };
   }
 
   public async findRecords(payload: IFindRecordsPayload): Promise<Record3D[]> {
     const logContext = { ...this.logContext, function: this.findRecords.name };
-    this.logger.debug({ msg: `Searching in catalog ${this.catalog}/metadata/find`, logContext, payload });
+    this.logger.debug({ msg: `Searching in catalog ${this.catalogUrl}/metadata/find`, logContext, payload });
     try {
-      const response = await axios.post<Record3D[]>(`${this.catalog}/metadata/find`, payload);
+      const response = await axios.post<Record3D[]>(`${this.catalogUrl}/metadata/find`, payload);
       if (response.status !== StatusCodes.OK.valueOf()) {
-        this.logger.error({ msg: `Catalog returned unexpected status: ${response.status}`, logContext });
-        throw new AppError('catalog', StatusCodes.INTERNAL_SERVER_ERROR, 'Problem with catalog during record lookup', true);
+        this.logger.error({ msg: `Catalog returned unexpected status: ${response.status}`, logContext, payload });
+        throw new AppError('catalog', StatusCodes.INTERNAL_SERVER_ERROR, 'Problem with catalog during findRecords', true);
       }
 
       const records = response.data;
       if (!Array.isArray(records)) {
-        return [];
+        this.logger.error({ msg: 'Catalog returned a non-array response', logContext, payload });
+        throw new AppError('catalog', StatusCodes.INTERNAL_SERVER_ERROR, 'Problem with catalog during findRecords', true);
       }
 
       this.logger.debug({ msg: `Found ${records.length} record(s) in catalog`, logContext });
@@ -46,7 +45,7 @@ export class CatalogCall {
         throw err;
       }
 
-      this.logger.error({ msg: 'Something went wrong in catalog when trying to find records', logContext, err });
+      this.logger.error({ msg: 'Something went wrong in catalog when trying to find records', logContext, err, payload });
       throw new AppError('catalog', StatusCodes.INTERNAL_SERVER_ERROR, 'Problem with catalog find', true);
     }
   }

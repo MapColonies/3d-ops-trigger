@@ -1,12 +1,10 @@
 import type { Logger } from '@map-colonies/js-logger';
 import { StatusCodes } from 'http-status-codes';
 import { inject, injectable } from 'tsyringe';
-import { new3DLayerMetadataSchema, geometrySchema } from '@map-colonies/3d-shared';
+import { new3DLayerMetadataSchema, geometrySchema, AppError, type LogContext } from '@map-colonies/3d-shared';
 import { SERVICES } from '@common/constants';
-import type { LogContext } from '@common/interfaces';
-import { AppError } from '@common/appError';
-import { LookupTablesCall } from '../externalServices/lookupTables/lookupTablesCall';
-import { CatalogCall } from '../externalServices/catalog/catalogCall';
+import { LookupTablesClient } from '../externalServices/lookupTables/lookupTablesClient';
+import { CatalogClient } from '../externalServices/catalog/catalogClient';
 
 export const ERROR_METADATA_DATE = 'imagingTimeBeginUTC must not be later than imagingTimeEndUTC';
 export const ERROR_METADATA_MISSING_DATE = 'imagingTimeBeginUTC and imagingTimeEndUTC are required';
@@ -20,8 +18,8 @@ export class ValidationManager {
 
   public constructor(
     @inject(SERVICES.LOGGER) private readonly logger: Logger,
-    @inject(LookupTablesCall) private readonly lookupTables: LookupTablesCall,
-    @inject(CatalogCall) private readonly catalog: CatalogCall
+    @inject(LookupTablesClient) private readonly lookupTables: LookupTablesClient,
+    @inject(CatalogClient) private readonly catalog: CatalogClient
   ) {
     this.logContext = {
       fileName: __filename,

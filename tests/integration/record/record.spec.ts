@@ -9,12 +9,12 @@ import { SERVICES } from '@common/constants';
 import type { InjectionObject } from '@common/dependencyRegistration';
 import { initConfig } from '@src/common/config';
 import type { IngestionPayload } from '@src/record/models/recordManager';
-import { LookupTablesCall } from '@src/externalServices/lookupTables/lookupTablesCall';
-import { CatalogCall } from '@src/externalServices/catalog/catalogCall';
+import { LookupTablesClient } from '@src/externalServices/lookupTables/lookupTablesClient';
+import { CatalogClient } from '@src/externalServices/catalog/catalogClient';
 import { ValidationManager } from '@src/validator/validationManager';
 
-const lookupStub = { getClassifications: vi.fn().mockResolvedValue(['4']) } as unknown as LookupTablesCall;
-const catalogStub = { findRecords: vi.fn().mockResolvedValue([]) } as unknown as CatalogCall;
+const lookupStub = { getClassifications: vi.fn().mockResolvedValue(['4']) } as unknown as LookupTablesClient;
+const catalogStub = { findRecords: vi.fn().mockResolvedValue([]) } as unknown as CatalogClient;
 const noopValidator = { validateIngestion: vi.fn().mockResolvedValue(undefined) } as unknown as ValidationManager;
 
 const validIngestionPayload: IngestionPayload = {
@@ -40,8 +40,8 @@ describe('record', function () {
       override: [
         { token: SERVICES.LOGGER, provider: { useValue: await jsLogger({ enabled: false }) } },
         { token: SERVICES.TRACER, provider: { useValue: trace.getTracer('testTracer') } },
-        { token: LookupTablesCall, provider: { useValue: lookupStub } },
-        { token: CatalogCall, provider: { useValue: catalogStub } },
+        { token: LookupTablesClient, provider: { useValue: lookupStub } },
+        { token: CatalogClient, provider: { useValue: catalogStub } },
         ...extraOverrides,
       ],
       useChild: true,

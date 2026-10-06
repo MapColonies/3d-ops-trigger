@@ -2,14 +2,13 @@ import axios from 'axios';
 import { inject, injectable } from 'tsyringe';
 import type { Logger } from '@map-colonies/js-logger';
 import { StatusCodes } from 'http-status-codes';
+import { AppError, type LogContext } from '@map-colonies/3d-shared';
 import { SERVICES } from '@common/constants';
-import { AppError } from '@common/appError';
 import type { ConfigType, LookupTablesConfig } from '@common/config';
-import type { LogContext } from '@common/interfaces';
 import type { ILookupOption } from './interfaces';
 
 @injectable()
-export class LookupTablesCall {
+export class LookupTablesClient {
   private readonly logContext: LogContext;
   private readonly lookupTables: LookupTablesConfig;
 
@@ -20,7 +19,7 @@ export class LookupTablesCall {
     this.lookupTables = this.config.get('externalServices.lookupTables');
     this.logContext = {
       fileName: __filename,
-      class: LookupTablesCall.name,
+      class: LookupTablesClient.name,
     };
   }
 

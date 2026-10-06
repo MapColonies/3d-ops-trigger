@@ -1,9 +1,9 @@
 import type { Logger } from '@map-colonies/js-logger';
 import { StatusCodes } from 'http-status-codes';
 import { injectable, inject } from 'tsyringe';
+import type { LogContext } from '@map-colonies/3d-shared';
 import type { TypedRequestHandlers } from '@openapi';
 import { SERVICES } from '@common/constants';
-import type { LogContext } from '@common/interfaces';
 import { RecordManager } from '../models/recordManager';
 
 @injectable()

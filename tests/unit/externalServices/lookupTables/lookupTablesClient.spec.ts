@@ -1,8 +1,8 @@
 import axios from 'axios';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { jsLogger } from '@map-colonies/js-logger';
-import { LookupTablesCall } from '@src/externalServices/lookupTables/lookupTablesCall';
-import { AppError } from '@src/common/appError';
+import { AppError } from '@map-colonies/3d-shared';
+import { LookupTablesClient } from '@src/externalServices/lookupTables/lookupTablesClient';
 import type { ConfigType } from '@src/common/config';
 
 vi.mock('axios');
@@ -10,12 +10,12 @@ const mockedAxios = vi.mocked(axios, true);
 
 const configStub = { get: (): unknown => ({ url: 'http://lookup', subUrl: 'lookup-tables/lookupData' }) } as unknown as ConfigType;
 
-describe('LookupTablesCall', function () {
-  let client: LookupTablesCall;
+describe('LookupTablesClient', function () {
+  let client: LookupTablesClient;
 
   beforeEach(async function () {
     vi.clearAllMocks();
-    client = new LookupTablesCall(configStub, await jsLogger({ enabled: false }));
+    client = new LookupTablesClient(configStub, await jsLogger({ enabled: false }));
   });
 
   it('should return the classification values from the service', async function () {

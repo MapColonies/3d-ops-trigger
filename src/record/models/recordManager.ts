@@ -1,8 +1,8 @@
 import type { Logger } from '@map-colonies/js-logger';
 import { inject, injectable } from 'tsyringe';
+import type { LogContext } from '@map-colonies/3d-shared';
 import type { components } from '@openapi';
 import { SERVICES } from '@common/constants';
-import type { LogContext } from '@common/interfaces';
 import { ValidationManager } from '../../validator/validationManager';
 
 export type IngestionPayload = components['schemas']['ingestionPayload'];

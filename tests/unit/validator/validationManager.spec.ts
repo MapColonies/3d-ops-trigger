@@ -1,6 +1,7 @@
 import { jsLogger } from '@map-colonies/js-logger';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { StatusCodes } from 'http-status-codes';
+import { AppError } from '@map-colonies/3d-shared';
 import {
   ValidationManager,
   ERROR_METADATA_DATE,
@@ -8,19 +9,18 @@ import {
   ERROR_METADATA_MISSING_DATE,
   ERROR_METADATA_INVALID_DATE,
 } from '@src/validator/validationManager';
-import { AppError } from '@src/common/appError';
-import type { LookupTablesCall } from '@src/externalServices/lookupTables/lookupTablesCall';
-import type { CatalogCall } from '@src/externalServices/catalog/catalogCall';
+import type { LookupTablesClient } from '@src/externalServices/lookupTables/lookupTablesClient';
+import type { CatalogClient } from '@src/externalServices/catalog/catalogClient';
 import { buildValidMetadata as validMetadata } from '@tests/helpers/metadata';
 
-const lookupStub = { getClassifications: vi.fn().mockResolvedValue(['abc123']) } as unknown as LookupTablesCall;
+const lookupStub = { getClassifications: vi.fn().mockResolvedValue(['abc123']) } as unknown as LookupTablesClient;
 
 describe('ValidationManager', function () {
   let validator: ValidationManager;
-  let catalogStub: CatalogCall;
+  let catalogStub: CatalogClient;
 
   beforeEach(async function () {
-    catalogStub = { findRecords: vi.fn().mockResolvedValue([]) } as unknown as CatalogCall;
+    catalogStub = { findRecords: vi.fn().mockResolvedValue([]) } as unknown as CatalogClient;
     validator = new ValidationManager(await jsLogger({ enabled: false }), lookupStub, catalogStub);
   });
 
