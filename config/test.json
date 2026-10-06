@@ -1,1 +1,5 @@
-{}
+{
+  "storage": {
+    "basePath": "./tests/fixtures/ingestion"
+  }
+}

@@ -11,16 +11,14 @@ import { initConfig } from '@src/common/config';
 import type { IngestionPayload } from '@src/record/models/recordManager';
 import { LookupTablesClient } from '@src/externalServices/lookupTables/lookupTablesClient';
 import { CatalogClient } from '@src/externalServices/catalog/catalogClient';
-import { ValidationManager } from '@src/validator/validationManager';
 
 const lookupStub = { getClassifications: vi.fn().mockResolvedValue(['4']) } as unknown as LookupTablesClient;
 const catalogStub = { findRecords: vi.fn().mockResolvedValue([]) } as unknown as CatalogClient;
-const noopValidator = { validateIngestion: vi.fn().mockResolvedValue(undefined) } as unknown as ValidationManager;
 
 const validIngestionPayload: IngestionPayload = {
-  modelPath: '/shared/models/afula/data/tileset.json',
-  productShapefilePath: '/shared/models/afula/shape/Product.shp',
-  metadataShapefilePath: '/shared/models/afula/shape/ShapeMetadata.shp',
+  modelPath: 'afula/data/tileset.json',
+  productShapefilePath: 'afula/shape/Product.shp',
+  metadataShapefilePath: 'afula/shape/ShapeMetadata.shp',
   productName: 'afula',
   productId: 'afula-1',
   productType: '3DPhotoRealistic',
@@ -50,7 +48,7 @@ describe('record', function () {
   };
 
   beforeEach(async function () {
-    requestSender = await buildRequestSender([{ token: ValidationManager, provider: { useValue: noopValidator } }]);
+    requestSender = await buildRequestSender([]);
   });
 
   describe('POST /record', function () {
@@ -69,18 +67,37 @@ describe('record', function () {
     it('should return 400 when a required field is missing', async function () {
       const response = await requestSender.createRecord({
         // @ts-expect-error intentionally invalid: missing shapefile paths and metadata fields
-        requestBody: { modelPath: '/shared/models/afula/data/tileset.json' },
+        requestBody: { modelPath: 'afula/data/tileset.json' },
       });
 
       expect(response).toSatisfyApiSpec();
       expect(response.status).toBe(httpStatusCodes.BAD_REQUEST);
     });
 
+    it('should return 201 for a valid .3tz model', async function () {
+      const response = await requestSender.createRecord({ requestBody: { ...validIngestionPayload, modelPath: 'afula/data/model.3tz' } });
+
+      expect(response).toSatisfyApiSpec();
+      expect(response.status).toBe(httpStatusCodes.CREATED);
+    });
+
+    it('should return 400 when a model file does not exist', async function () {
+      const response = await requestSender.createRecord({ requestBody: { ...validIngestionPayload, modelPath: 'afula/data/missing.json' } });
+
+      expect(response).toSatisfyApiSpec();
+      expect(response.status).toBe(httpStatusCodes.BAD_REQUEST);
+      expect(response.body).toHaveProperty('message', 'missing files: afula/data/missing.json');
+    });
+
+    it('should return 400 when a path escapes the storage base path', async function () {
+      const response = await requestSender.createRecord({ requestBody: { ...validIngestionPayload, modelPath: '../afula/data/tileset.json' } });
+
+      expect(response).toSatisfyApiSpec();
+      expect(response.status).toBe(httpStatusCodes.BAD_REQUEST);
+    });
+
     it('should return 400 when metadata fails business validation', async function () {
-      const realValidatorSender = await buildRequestSender([]);
-      const response = await realValidatorSender.createRecord({
-        requestBody: validIngestionPayload,
-      });
+      const response = await requestSender.createRecord({ requestBody: { ...validIngestionPayload, classification: 'notInLookup' } });
 
       expect(response).toSatisfyApiSpec();
       expect(response.status).toBe(httpStatusCodes.BAD_REQUEST);

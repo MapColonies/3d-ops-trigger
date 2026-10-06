@@ -78,6 +78,9 @@ server:
   responseCompressionEnabled: true
   requestPayloadLimit: 1mb
 
+storage:
+  basePath: /app/models
+
 externalServices:
   catalogUrl: ''
   lookupTables:

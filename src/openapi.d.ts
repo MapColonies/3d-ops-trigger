@@ -71,18 +71,18 @@ export type components = {
     };
     ingestionPayload: {
       /**
-       * @description Path to the model inside the data/ folder - a tileset.json (3D Tiles) or a .3tz file
-       * @example /shared/models/afula/data/tileset.json
+       * @description Path (relative to the storage base path) to the model inside the data/ folder - a tileset.json (3D Tiles) or a .3tz file
+       * @example afula/data/tileset.json
        */
       modelPath: string;
       /**
-       * @description Path to the footprint shapefile (shape/Product.shp)
-       * @example /shared/models/afula/shape/Product.shp
+       * @description Path (relative to the storage base path) to the footprint shapefile (shape/Product.shp). .shx, .dbf, .prj (WGS84) and .cpg (UTF-8) must sit next to it
+       * @example afula/shape/Product.shp
        */
       productShapefilePath: string;
       /**
-       * @description Path to the parts metadata shapefile (shape/ShapeMetadata.shp)
-       * @example /shared/models/afula/shape/ShapeMetadata.shp
+       * @description Path (relative to the storage base path) to the parts metadata shapefile (shape/ShapeMetadata.shp). .shx, .dbf, .prj (WGS84) and .cpg (UTF-8) must sit next to it
+       * @example afula/shape/ShapeMetadata.shp
        */
       metadataShapefilePath: string;
       /** @description Pre-filled from the prodName shapefile attribute, user editable */

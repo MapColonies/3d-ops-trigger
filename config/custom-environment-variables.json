@@ -5,5 +5,8 @@
       "url": "LOOKUP_TABLES_URL",
       "subUrl": "LOOKUP_TABLES_SUB_URL"
     }
+  },
+  "storage": {
+    "basePath": "STORAGE_BASE_PATH"
   }
 }
