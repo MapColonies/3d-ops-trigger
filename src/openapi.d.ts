@@ -4,39 +4,62 @@
 
 import type { TypedRequestHandlers as ImportedTypedRequestHandlers } from '@map-colonies/openapi-express-types';
 export type paths = {
-  '/anotherResource': {
+  '/record': {
     parameters: {
       query?: never;
       header?: never;
       path?: never;
       cookie?: never;
     };
-    /** gets the resource */
-    get: operations['getAnotherResource'];
+    get?: never;
     put?: never;
-    post?: never;
+    /**
+     * Start an ingestion process flow
+     * @description Validates the request (light & fast) and creates a Jobnik ingestion job.
+     */
+    post: operations['createRecord'];
     delete?: never;
     options?: never;
     head?: never;
     patch?: never;
     trace?: never;
   };
-  '/resourceName': {
+  '/record/{id}': {
     parameters: {
       query?: never;
       header?: never;
       path?: never;
       cookie?: never;
     };
-    /** gets the resource */
-    get: operations['getResourceName'];
+    get?: never;
     put?: never;
-    /** creates a new record of type resource */
-    post: operations['createResource'];
+    post?: never;
+    /**
+     * Start a delete process flow
+     * @description Validates the record can be deleted and creates a Jobnik delete job.
+     */
+    delete: operations['deleteRecord'];
+    options?: never;
+    head?: never;
+    /** Update metadata for a record */
+    patch: operations['updateRecord'];
+    trace?: never;
+  };
+  '/record/status/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
     delete?: never;
     options?: never;
     head?: never;
-    patch?: never;
+    /** Update the publish/unpublish status of a record */
+    patch: operations['updateRecordStatus'];
     trace?: never;
   };
 };
@@ -46,84 +69,69 @@ export type components = {
     error: {
       message: string;
     };
-    resource: {
-      /** Format: int64 */
-      id: number;
-      name: string;
-      description: string;
+    ingestionPayload: {
+      /**
+       * @description Path to the model inside the data/ folder - a tileset.json (3D Tiles) or a .3tz file
+       * @example /shared/models/afula/data/tileset.json
+       */
+      modelPath: string;
+      /**
+       * @description Path to the footprint shapefile (shape/Product.shp)
+       * @example /shared/models/afula/shape/Product.shp
+       */
+      productShapefilePath: string;
+      /**
+       * @description Path to the parts metadata shapefile (shape/ShapeMetadata.shp)
+       * @example /shared/models/afula/shape/ShapeMetadata.shp
+       */
+      metadataShapefilePath: string;
+      /** @description Pre-filled from the prodName shapefile attribute, user editable */
+      productName: string;
+      /** @description Deterministic id derived from the prodID attribute and the storage id */
+      productId: string;
+      /** @enum {string} */
+      productType:
+        | '3DPhotoRealistic'
+        | '3DPhotoRealisticBest'
+        | '3DSemantic'
+        | '3DSemanticMesh'
+        | 'QuantizedMeshDTMBest'
+        | 'QuantizedMeshDSMBest'
+        | '3DPointCloud';
+      productSubType?: string;
+      description?: string;
+      region: string[];
+      classification: string;
+      keywords?: string;
     };
-    anotherResource: {
-      kind: string;
-      isAlive: boolean;
+    /** @description Partial metadata fields to update */
+    updatePayload: {
+      [key: string]: unknown;
+    };
+    statusPayload: {
+      /** @enum {string} */
+      status: 'PUBLISHED' | 'UNPUBLISHED';
+    };
+    jobResponse: {
+      jobId: string;
+      status: string;
+    };
+    ackResponse: {
+      message: string;
     };
   };
   responses: never;
-  parameters: never;
+  parameters: {
+    /** @description The record identifier */
+    recordId: string;
+  };
   requestBodies: never;
   headers: never;
   pathItems: never;
 };
 export type $defs = Record<string, never>;
 export interface operations {
-  getAnotherResource: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description OK */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['anotherResource'];
-        };
-      };
-      /** @description Bad Request */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['error'];
-        };
-      };
-    };
-  };
-  getResourceName: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description OK */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['resource'];
-        };
-      };
-      /** @description Bad Request */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['error'];
-        };
-      };
-    };
-  };
-  createResource: {
+  createRecord: {
     parameters: {
       query?: never;
       header?: never;
@@ -132,21 +140,152 @@ export interface operations {
     };
     requestBody: {
       content: {
-        'application/json': components['schemas']['resource'];
+        'application/json': components['schemas']['ingestionPayload'];
       };
     };
     responses: {
-      /** @description created */
+      /** @description Ingestion job created */
       201: {
         headers: {
           [name: string]: unknown;
         };
         content: {
-          'application/json': components['schemas']['resource'];
+          'application/json': components['schemas']['jobResponse'];
         };
       };
       /** @description Bad Request */
       400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['error'];
+        };
+      };
+    };
+  };
+  deleteRecord: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The record identifier */
+        id: components['parameters']['recordId'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Delete job created */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['jobResponse'];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['error'];
+        };
+      };
+      /** @description Record not found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['error'];
+        };
+      };
+    };
+  };
+  updateRecord: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The record identifier */
+        id: components['parameters']['recordId'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['updatePayload'];
+      };
+    };
+    responses: {
+      /** @description Metadata updated */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ackResponse'];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['error'];
+        };
+      };
+      /** @description Record not found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['error'];
+        };
+      };
+    };
+  };
+  updateRecordStatus: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The record identifier */
+        id: components['parameters']['recordId'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['statusPayload'];
+      };
+    };
+    responses: {
+      /** @description Status updated */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ackResponse'];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['error'];
+        };
+      };
+      /** @description Record not found */
+      404: {
         headers: {
           [name: string]: unknown;
         };
