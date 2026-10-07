@@ -84,9 +84,6 @@ validations:
     subUrl: ''
 
 env:
-  basePath: ''
-  storeTrigger:
-    url:
   catalog:
     url:
   extractable:

@@ -7,18 +7,12 @@ interface LookupTablesConfig {
 }
 
 interface ExternalServicesConfig {
-  storeTrigger: string;
   catalog: string;
   extractable: string;
   lookupTables: LookupTablesConfig;
 }
 
-interface PathsConfig {
-  basePath: string;
-  pvPath: string;
-}
-
-type OpsTriggerConfigType = commonBoilerplateV3Type & { externalServices: ExternalServicesConfig; paths: PathsConfig };
+type OpsTriggerConfigType = commonBoilerplateV3Type & { externalServices: ExternalServicesConfig };
 
 type ConfigType = ConfigInstance<OpsTriggerConfigType>;
 
@@ -29,13 +23,12 @@ const opsTriggerConfigSchema = {
     { $ref: commonBoilerplateV3.$id },
     {
       type: 'object',
-      required: ['externalServices', 'paths'],
+      required: ['externalServices'],
       properties: {
         externalServices: {
           type: 'object',
-          required: ['storeTrigger', 'catalog', 'extractable', 'lookupTables'],
+          required: ['catalog', 'extractable', 'lookupTables'],
           properties: {
-            storeTrigger: { type: 'string' },
             extractable: { type: 'string' },
             lookupTables: {
               type: 'object',
@@ -46,14 +39,6 @@ const opsTriggerConfigSchema = {
               },
             },
             catalog: { type: 'string' },
-          },
-        },
-        paths: {
-          type: 'object',
-          required: ['basePath', 'pvPath'],
-          properties: {
-            basePath: { type: 'string', minLength: 1 },
-            pvPath: { type: 'string', minLength: 1 },
           },
         },
       },
@@ -78,4 +63,4 @@ function getConfig(): ConfigType {
 }
 
 export { getConfig, initConfig };
-export type { ConfigType, LookupTablesConfig, ExternalServicesConfig, PathsConfig };
+export type { ConfigType, LookupTablesConfig, ExternalServicesConfig };
