@@ -34,10 +34,16 @@
     }
   },
   "externalServices": {
-    "catalogUrl": "http://127.0.0.1:8080",
+    "storeTrigger": "http://127.0.0.1:8080",
+    "catalog": "http://127.0.0.1:8080",
+    "extractable": "http://127.0.0.1:8080",
     "lookupTables": {
       "url": "http://127.0.0.1:8080",
       "subUrl": "lookup-tables/lookupData"
     }
+  },
+  "paths": {
+    "basePath": "\\\\domtest\\mimi\\archi\\maz\\silver\\libot",
+    "pvPath": "/home/3DModels"
   }
 }
