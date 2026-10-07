@@ -34,7 +34,6 @@
     }
   },
   "externalServices": {
-    "storeTrigger": "http://127.0.0.1:8080",
     "catalog": "http://127.0.0.1:8080",
     "extractable": "http://127.0.0.1:8080",
     "lookupTables": {

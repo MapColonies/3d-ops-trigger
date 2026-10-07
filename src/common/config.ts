@@ -12,7 +12,6 @@ interface PathsConfig {
 }
 
 interface ExternalServicesConfig {
-  storeTrigger: string;
   catalog: string;
   extractable: string;
   lookupTables: LookupTablesConfig;
@@ -41,9 +40,8 @@ const opsTriggerConfigSchema = {
         },
         externalServices: {
           type: 'object',
-          required: ['storeTrigger', 'catalog', 'extractable', 'lookupTables'],
+          required: ['catalog', 'extractable', 'lookupTables'],
           properties: {
-            storeTrigger: { type: 'string' },
             extractable: { type: 'string' },
             lookupTables: {
               type: 'object',
