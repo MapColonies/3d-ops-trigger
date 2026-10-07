@@ -9,13 +9,13 @@ import type { ConfigType } from '@common/config';
 @injectable()
 export class CatalogClient {
   private readonly logContext: LogContext;
-  private readonly catalog: string;
+  private readonly catalogUrl: string;
 
   public constructor(
     @inject(SERVICES.CONFIG) private readonly config: ConfigType,
     @inject(SERVICES.LOGGER) private readonly logger: Logger
   ) {
-    this.catalog = this.config.get('externalServices.catalog');
+    this.catalogUrl = this.config.get('externalServices.catalogUrl');
     this.logContext = {
       fileName: __filename,
       class: CatalogClient.name,
@@ -24,9 +24,9 @@ export class CatalogClient {
 
   public async findRecords(payload: IFindRecordsPayload): Promise<Record3D[]> {
     const logContext = { ...this.logContext, function: this.findRecords.name };
-    this.logger.debug({ msg: `Searching in catalog ${this.catalog}/metadata/find`, logContext, payload });
+    this.logger.debug({ msg: `Searching in catalog ${this.catalogUrl}/metadata/find`, logContext, payload });
     try {
-      const response = await axios.post<Record3D[]>(`${this.catalog}/metadata/find`, payload);
+      const response = await axios.post<Record3D[]>(`${this.catalogUrl}/metadata/find`, payload);
       if (response.status !== StatusCodes.OK.valueOf()) {
         this.logger.error({ msg: `Catalog returned unexpected status: ${response.status}`, logContext, payload });
         throw new AppError('catalog', StatusCodes.INTERNAL_SERVER_ERROR, 'Problem with catalog during findRecords', true);
