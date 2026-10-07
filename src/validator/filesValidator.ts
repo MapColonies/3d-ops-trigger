@@ -12,13 +12,13 @@ import type { IngestionFiles, ShapefileFiles } from './interfaces';
 const ZIP_LOCAL_FILE_HEADER_SIGNATURE = 0x04034b50;
 const ZIP_SIGNATURE_LENGTH = 4;
 const VALID_CPG_ENCODINGS = ['UTF-8', 'UTF8'];
-const WGS84_PATTERN = /WGS[\s_]?(19)?84/i;
+const WGS84_DATUM_PATTERN = /DATUM\[\s*"(D_)?WGS[\s_]?(19)?84"/i;
 
 export const DATA_FOLDER = 'data';
 export const SHAPE_FOLDER = 'shape';
 export const SHAPEFILE_SIDECAR_EXTENSIONS = ['.shp', '.shx', '.dbf', '.prj', '.cpg'] as const;
 
-export const ERROR_PATH_OUTSIDE_BASE = 'path must be inside the storage base path';
+export const ERROR_PATH_OUTSIDE_BASE = "path isn't in the agreed folder (base path)";
 export const ERROR_MODEL_FORMAT = 'modelPath must point to a tileset.json (.json) or a .3tz file';
 export const ERROR_MODEL_NOT_IN_DATA = `modelPath must be inside the "${DATA_FOLDER}" folder, next to the "${SHAPE_FOLDER}" folder`;
 export const ERROR_SHAPEFILE_FORMAT = 'shapefile paths must point to a .shp file';
@@ -33,12 +33,14 @@ export const ERROR_3TZ_INVALID = '.3tz file is not a valid zip archive';
 export class FilesValidator {
   private readonly logContext: LogContext;
   private readonly basePath: string;
+  private readonly pvPath: string;
 
   public constructor(
     @inject(SERVICES.CONFIG) private readonly config: ConfigType,
     @inject(SERVICES.LOGGER) private readonly logger: Logger
   ) {
-    this.basePath = resolve(this.config.get('storage.basePath'));
+    this.basePath = this.toPosix(this.config.get('paths.basePath')).replace(/\/+$/, '');
+    this.pvPath = resolve(this.config.get('paths.pvPath'));
     this.logContext = {
       fileName: __filename,
       class: FilesValidator.name,
@@ -51,9 +53,9 @@ export class FilesValidator {
     const logContext = { ...this.logContext, function: this.validateIngestionFiles.name };
     this.logger.info({ msg: 'ingestion files validation start', logContext, modelPath: payload.modelPath });
 
-    const modelPath = this.resolveInBase(payload.modelPath, 'modelPath');
-    const productShapefilePath = this.resolveInBase(payload.productShapefilePath, 'productShapefilePath');
-    const metadataShapefilePath = this.resolveInBase(payload.metadataShapefilePath, 'metadataShapefilePath');
+    const modelPath = this.toMountedPath(payload.modelPath, 'modelPath');
+    const productShapefilePath = this.toMountedPath(payload.productShapefilePath, 'productShapefilePath');
+    const metadataShapefilePath = this.toMountedPath(payload.metadataShapefilePath, 'metadataShapefilePath');
 
     this.validateLayout(modelPath, productShapefilePath, metadataShapefilePath);
 
@@ -69,49 +71,61 @@ export class FilesValidator {
     return { modelPath, product, metadata };
   }
 
-  private resolveInBase(relativePath: string, field: string): string {
-    const absolutePath = resolve(join(this.basePath, relativePath));
-    if (!absolutePath.startsWith(this.basePath + sep)) {
-      throw new AppError('badRequest', StatusCodes.BAD_REQUEST, `${field}: ${ERROR_PATH_OUTSIDE_BASE}`, true);
+  private reject(logContext: LogContext, message: string, details: Record<string, unknown>): never {
+    this.logger.error({ msg: message, logContext, ...details });
+    throw new AppError('badRequest', StatusCodes.BAD_REQUEST, message, true);
+  }
+
+  private toPosix(path: string): string {
+    return path.replaceAll('\\', '/');
+  }
+
+  private toMountedPath(sharePath: string, field: string): string {
+    const logContext = { ...this.logContext, function: this.toMountedPath.name };
+    const posixPath = this.toPosix(sharePath);
+    const isUnderBasePath = posixPath.startsWith(`${this.basePath}/`);
+    const mountedPath = resolve(join(this.pvPath, posixPath.slice(this.basePath.length)));
+
+    if (!isUnderBasePath || !mountedPath.startsWith(this.pvPath + sep)) {
+      this.reject(logContext, `${field}: ${ERROR_PATH_OUTSIDE_BASE}`, { path: sharePath, basePath: this.basePath });
     }
-    return absolutePath;
+    return mountedPath;
   }
 
   private validateLayout(modelPath: string, productShapefilePath: string, metadataShapefilePath: string): void {
+    const logContext = { ...this.logContext, function: this.validateLayout.name };
     const modelExtension = extname(modelPath).toLowerCase();
     if (modelExtension !== '.json' && modelExtension !== '.3tz') {
-      throw new AppError('badRequest', StatusCodes.BAD_REQUEST, ERROR_MODEL_FORMAT, true);
+      this.reject(logContext, ERROR_MODEL_FORMAT, { modelPath });
     }
 
     for (const shapefilePath of [productShapefilePath, metadataShapefilePath]) {
       if (extname(shapefilePath).toLowerCase() !== '.shp') {
-        throw new AppError('badRequest', StatusCodes.BAD_REQUEST, ERROR_SHAPEFILE_FORMAT, true);
+        this.reject(logContext, ERROR_SHAPEFILE_FORMAT, { shapefilePath });
       }
       if (basename(dirname(shapefilePath)) !== SHAPE_FOLDER) {
-        throw new AppError('badRequest', StatusCodes.BAD_REQUEST, ERROR_SHAPEFILE_NOT_IN_SHAPE, true);
+        this.reject(logContext, ERROR_SHAPEFILE_NOT_IN_SHAPE, { shapefilePath });
       }
     }
 
     const shapeFolder = dirname(productShapefilePath);
     if (dirname(metadataShapefilePath) !== shapeFolder) {
-      throw new AppError('badRequest', StatusCodes.BAD_REQUEST, ERROR_SHAPEFILES_DIFFERENT_FOLDERS, true);
+      this.reject(logContext, ERROR_SHAPEFILES_DIFFERENT_FOLDERS, { productShapefilePath, metadataShapefilePath });
     }
 
     const dataFolder = join(dirname(shapeFolder), DATA_FOLDER);
     if (!modelPath.startsWith(dataFolder + sep)) {
-      throw new AppError('badRequest', StatusCodes.BAD_REQUEST, ERROR_MODEL_NOT_IN_DATA, true);
+      this.reject(logContext, ERROR_MODEL_NOT_IN_DATA, { modelPath, dataFolder });
     }
   }
 
   private toShapefileFiles(shpPath: string): ShapefileFiles {
-    const base = shpPath.slice(0, -extname(shpPath).length);
-    const [shp, shx, dbf, prj, cpg] = SHAPEFILE_SIDECAR_EXTENSIONS.map((extension) => `${base}${extension}`) as [
-      string,
-      string,
-      string,
-      string,
-      string,
-    ];
+    const shpExtension = extname(shpPath);
+    const base = shpPath.slice(0, -shpExtension.length);
+    const isUpperCase = shpExtension === shpExtension.toUpperCase();
+    const [shp, shx, dbf, prj, cpg] = SHAPEFILE_SIDECAR_EXTENSIONS.map(
+      (extension) => `${base}${isUpperCase ? extension.toUpperCase() : extension}`
+    ) as [string, string, string, string, string];
     return { shp, shx, dbf, prj, cpg };
   }
 
@@ -120,10 +134,11 @@ export class FilesValidator {
   }
 
   private async validateExistence(paths: string[]): Promise<void> {
+    const logContext = { ...this.logContext, function: this.validateExistence.name };
     const results = await Promise.all(paths.map(async (path) => ({ path, exists: await this.isFile(path) })));
-    const missing = results.filter((result) => !result.exists).map((result) => result.path.slice(this.basePath.length + 1));
+    const missing = results.filter((result) => !result.exists).map((result) => result.path.slice(this.pvPath.length + 1));
     if (missing.length > 0) {
-      throw new AppError('badRequest', StatusCodes.BAD_REQUEST, `missing files: ${missing.join(', ')}`, true);
+      this.reject(logContext, `missing files: ${missing.join(', ')}`, { missing });
     }
   }
 
@@ -139,6 +154,7 @@ export class FilesValidator {
   }
 
   private async validateModelFormat(modelPath: string): Promise<void> {
+    const logContext = { ...this.logContext, function: this.validateModelFormat.name };
     if (extname(modelPath).toLowerCase() === '.3tz') {
       await this.validate3tz(modelPath);
       return;
@@ -147,23 +163,24 @@ export class FilesValidator {
     let tileset: unknown;
     try {
       tileset = JSON.parse(await readFile(modelPath, 'utf-8'));
-    } catch {
-      throw new AppError('badRequest', StatusCodes.BAD_REQUEST, ERROR_TILESET_INVALID, true);
+    } catch (err) {
+      this.reject(logContext, ERROR_TILESET_INVALID, { modelPath, err });
     }
 
     const { asset, root } = (tileset ?? {}) as { asset?: unknown; root?: unknown };
     if (typeof asset !== 'object' || asset === null || typeof root !== 'object' || root === null) {
-      throw new AppError('badRequest', StatusCodes.BAD_REQUEST, ERROR_TILESET_INVALID, true);
+      this.reject(logContext, ERROR_TILESET_INVALID, { modelPath });
     }
   }
 
   private async validate3tz(modelPath: string): Promise<void> {
+    const logContext = { ...this.logContext, function: this.validate3tz.name };
     const handle = await open(modelPath, 'r');
     try {
       const buffer = Buffer.alloc(ZIP_SIGNATURE_LENGTH);
       const { bytesRead } = await handle.read(buffer, 0, ZIP_SIGNATURE_LENGTH, 0);
       if (bytesRead < ZIP_SIGNATURE_LENGTH || buffer.readUInt32LE(0) !== ZIP_LOCAL_FILE_HEADER_SIGNATURE) {
-        throw new AppError('badRequest', StatusCodes.BAD_REQUEST, ERROR_3TZ_INVALID, true);
+        this.reject(logContext, ERROR_3TZ_INVALID, { modelPath });
       }
     } finally {
       await handle.close();
@@ -171,14 +188,15 @@ export class FilesValidator {
   }
 
   private async validateShapefileFormat(files: ShapefileFiles): Promise<void> {
+    const logContext = { ...this.logContext, function: this.validateShapefileFormat.name };
     const prj = (await readFile(files.prj, 'utf-8')).trim();
-    if (!prj.startsWith('GEOGCS') || !WGS84_PATTERN.test(prj)) {
-      throw new AppError('badRequest', StatusCodes.BAD_REQUEST, `${basename(files.prj)}: ${ERROR_PRJ_NOT_WGS84}`, true);
+    if (!prj.startsWith('GEOGCS') || !WGS84_DATUM_PATTERN.test(prj)) {
+      this.reject(logContext, `${basename(files.prj)}: ${ERROR_PRJ_NOT_WGS84}`, { prj });
     }
 
     const cpg = (await readFile(files.cpg, 'utf-8')).trim().toUpperCase();
     if (!VALID_CPG_ENCODINGS.includes(cpg)) {
-      throw new AppError('badRequest', StatusCodes.BAD_REQUEST, `${basename(files.cpg)}: ${ERROR_CPG_NOT_UTF8}`, true);
+      this.reject(logContext, `${basename(files.cpg)}: ${ERROR_CPG_NOT_UTF8}`, { cpg });
     }
   }
 }

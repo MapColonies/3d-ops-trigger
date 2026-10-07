@@ -6,7 +6,8 @@
       "subUrl": "LOOKUP_TABLES_SUB_URL"
     }
   },
-  "storage": {
-    "basePath": "STORAGE_BASE_PATH"
+  "paths": {
+    "basePath": "BASE_PATH",
+    "pvPath": "PV_SOURCE_PATH"
   }
 }

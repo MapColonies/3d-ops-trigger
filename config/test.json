@@ -1,5 +1,6 @@
 {
-  "storage": {
-    "basePath": "./tests/fixtures/ingestion"
+  "paths": {
+    "basePath": "\\\\domtest\\models",
+    "pvPath": "./tests/fixtures/ingestion"
   }
 }

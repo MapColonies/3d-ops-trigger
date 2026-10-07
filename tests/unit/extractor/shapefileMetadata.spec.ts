@@ -143,6 +143,24 @@ describe('extractMetadata', function () {
     ]);
   });
 
+  it('should reject a date stored as a number', function () {
+    const metadata = collection([feature(square(35.28, 32.6), part({ dateStart: 20250706 }))]);
+
+    expect(errorsOf(product, metadata)).toEqual(['ShapeMetadata feature 1: dateStart must be a valid date']);
+  });
+
+  it('should reject a part whose minimum resolution is greater than its maximum', function () {
+    const metadata = collection([feature(square(35.28, 32.6), part({ minResM: 3, maxResM: 1 }))]);
+
+    expect(errorsOf(product, metadata)).toEqual(['ShapeMetadata feature 1: minResM must not be greater than maxResM']);
+  });
+
+  it('should reject a part whose imaging start is after its end', function () {
+    const metadata = collection([feature(square(35.28, 32.6), part({ dateStart: new Date(2025, 6, 9), dateEnd: new Date(2025, 6, 8) }))]);
+
+    expect(errorsOf(product, metadata)).toEqual(['ShapeMetadata feature 1: dateStart must not be later than dateEnd']);
+  });
+
   it('should reject an optional accuracy that is not a number', function () {
     const metadata = collection([feature(square(35.28, 32.6), part({ relSep90: 'x' }))]);
 

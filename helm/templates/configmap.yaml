@@ -30,9 +30,8 @@ data:
   {{- end }}
   {{- end }}
   npm_config_cache: /tmp/
-  {{- with .Values.storage }}
-  STORAGE_BASE_PATH: {{ .basePath | quote }}
-  {{- end }}
+  BASE_PATH: {{ .Values.paths.basePath | quote }}
+  PV_SOURCE_PATH: {{ .Values.NFS.pv_path | quote }}
   {{- with .Values.externalServices }}
   CATALOG_URL: {{ .catalogUrl | quote }}
   {{- with .lookupTables }}

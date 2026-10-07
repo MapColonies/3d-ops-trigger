@@ -11,9 +11,9 @@ import { initConfig } from '@src/common/config';
 import type { IngestionPayload } from '@src/record/models/recordManager';
 
 const ingestionPayload: IngestionPayload = {
-  modelPath: 'afula/data/tileset.json',
-  productShapefilePath: 'afula/shape/Product.shp',
-  metadataShapefilePath: 'afula/shape/ShapeMetadata.shp',
+  modelPath: '\\\\domtest\\models\\afula\\data\\tileset.json',
+  productShapefilePath: '\\\\domtest\\models\\afula\\shape\\Product.shp',
+  metadataShapefilePath: '\\\\domtest\\models\\afula\\shape\\ShapeMetadata.shp',
   productType: '3DPhotoRealistic',
   classification: '4',
   region: ['israel'],
@@ -114,8 +114,8 @@ describe('record', function () {
     });
 
     it.each([
-      ['a tileset.json model', 'afula/data/tileset.json'],
-      ['a .3tz model', 'afula/data/model.3tz'],
+      ['a tileset.json model', '\\\\domtest\\models\\afula\\data\\tileset.json'],
+      ['a .3tz model', '\\\\domtest\\models\\afula\\data\\model.3tz'],
     ])('should return 201 and a job response for %s', async function (_case, modelPath) {
       mockLookupTables();
       mockCatalogFind();
@@ -132,19 +132,23 @@ describe('record', function () {
     });
 
     it('should return 400 when a model file does not exist', async function () {
-      const response = await requestSender.createRecord({ requestBody: { ...ingestionPayload, modelPath: 'afula/data/missing.json' } });
+      const response = await requestSender.createRecord({
+        requestBody: { ...ingestionPayload, modelPath: '\\\\domtest\\models\\afula\\data\\missing.json' },
+      });
 
       expect(response).toSatisfyApiSpec();
       expect(response.status).toBe(httpStatusCodes.BAD_REQUEST);
       expect(response.body).toHaveProperty('message', 'missing files: afula/data/missing.json');
     });
 
-    it('should return 400 when a path escapes the storage base path', async function () {
-      const response = await requestSender.createRecord({ requestBody: { ...ingestionPayload, modelPath: '../afula/data/tileset.json' } });
+    it('should return 400 when a path is not under the base path', async function () {
+      const response = await requestSender.createRecord({
+        requestBody: { ...ingestionPayload, modelPath: '\\\\other\\share\\afula\\data\\tileset.json' },
+      });
 
       expect(response).toSatisfyApiSpec();
       expect(response.status).toBe(httpStatusCodes.BAD_REQUEST);
-      expect(response.body).toHaveProperty('message', expect.stringContaining('storage base path'));
+      expect(response.body).toHaveProperty('message', expect.stringContaining("isn't in the agreed folder"));
     });
 
     it('should return 400 when the classification is not in the lookup table', async function () {

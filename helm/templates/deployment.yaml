@@ -59,6 +59,13 @@ spec:
           {{- end }}
           {{- end }}
           volumeMounts:
+            {{- if .Values.NFS.name }}
+            - name: ingestion-storage
+              mountPath: {{ .Values.NFS.pv_path }}
+              {{- if .Values.NFS.sub_path }}
+              subPath: {{ .Values.NFS.sub_path }}
+              {{- end }}
+            {{- end }}
             {{- if .Values.caSecretName }}
             - mountPath: {{ printf "%s/%s" .Values.caPath .Values.caKey | quote }}
               name: root-ca
@@ -116,6 +123,11 @@ spec:
         {{ tpl (toYaml .Values.sidecars) . | nindent 8 }}
         {{- end }}
       volumes:
+        {{- if .Values.NFS.name }}
+        - name: ingestion-storage
+          persistentVolumeClaim:
+            claimName: {{ .Values.NFS.name }}
+        {{- end }}
         - name: nginx-config
           configMap:
             name: 'nginx-extra-configmap'      

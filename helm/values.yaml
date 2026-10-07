@@ -78,8 +78,13 @@ server:
   responseCompressionEnabled: true
   requestPayloadLimit: 1mb
 
-storage:
-  basePath: /app/models
+paths:
+  basePath: ''
+
+NFS:
+  name: ''
+  pv_path: ''
+  sub_path: ''
 
 externalServices:
   catalogUrl: ''

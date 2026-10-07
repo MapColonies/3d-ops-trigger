@@ -40,7 +40,8 @@
       "subUrl": "lookup-tables/lookupData"
     }
   },
-  "storage": {
-    "basePath": "/app/models"
+  "paths": {
+    "basePath": "\\\\domtest\\mimi\\archi\\maz\\silver\\libot",
+    "pvPath": "/home/3DModels"
   }
 }

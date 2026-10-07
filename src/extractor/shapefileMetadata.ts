@@ -54,6 +54,18 @@ const validateFeature = (feature: Feature, index: number): string[] => {
       errors.push(`${label}: ${field} must be a valid date`);
     }
   }
+
+  const minResolution = properties[F.minResM];
+  const maxResolution = properties[F.maxResM];
+  if (typeof minResolution === 'number' && typeof maxResolution === 'number' && minResolution > maxResolution) {
+    errors.push(`${label}: ${F.minResM} must not be greater than ${F.maxResM}`);
+  }
+
+  const dateStart = toUtcDate(properties[F.dateStart]);
+  const dateEnd = toUtcDate(properties[F.dateEnd]);
+  if (dateStart !== undefined && dateEnd !== undefined && dateStart > dateEnd) {
+    errors.push(`${label}: ${F.dateStart} must not be later than ${F.dateEnd}`);
+  }
   return errors;
 };
 
