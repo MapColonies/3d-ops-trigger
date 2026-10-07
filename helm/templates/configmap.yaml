@@ -2,6 +2,7 @@
 {{- $telemetry := .Values.telemetry -}}
 {{- $tracingUrl := include "ts-server-boilerplate.tracingUrl" . -}}
 {{- $opentelemetryLoggingUrl := include "ts-server-boilerplate.opentelemetryLoggingUrl" . -}}
+{{- $NFS := include "ts-server-boilerplate.NFS" . | fromYaml -}}
 {{- if .Values.enabled -}}
 apiVersion: v1
 kind: ConfigMap
@@ -30,15 +31,13 @@ data:
   {{- end }}
   {{- end }}
   npm_config_cache: /tmp/
-  BASE_PATH: {{ .Values.paths.basePath | quote }}
-  PV_SOURCE_PATH: {{ .Values.NFS.pv_path | quote }}
-  {{- with .Values.externalServices }}
-  CATALOG_URL: {{ .catalogUrl | quote }}
-  {{- with .lookupTables }}
-  LOOKUP_TABLES_URL: {{ .url | quote }}
-  LOOKUP_TABLES_SUB_URL: {{ .subUrl | quote }}
-  {{- end }}
-  {{- end }}
+  BASE_PATH: {{ tpl .Values.env.basePath . | quote }}
+  PV_SOURCE_PATH: {{ $NFS.pv_path | quote }}
+  STORE_TRIGGER_URL: {{ .Values.env.storeTrigger.url | default (printf "http://%s-store-trigger" .Release.Name) }}
+  CATALOG_URL: {{ .Values.env.catalog.url | default (printf "http://%s-catalog" .Release.Name) }}
+  EXTRACTABLE_URL: {{ .Values.env.extractable.url | default (printf "http://%s-extractable" .Release.Name) }}
+  LOOKUP_TABLES_URL: {{ .Values.validations.lookupTables.url | quote }}
+  LOOKUP_TABLES_SUB_URL: {{ .Values.validations.lookupTables.subUrl | quote }}
   {{- with .Values.configManagement }}
   CONFIG_NAME: {{ .name | quote }}
   CONFIG_VERSION: {{ .version | quote }}

@@ -12,8 +12,10 @@ interface PathsConfig {
 }
 
 interface ExternalServicesConfig {
+  storeTrigger: string;
+  catalog: string;
+  extractable: string;
   lookupTables: LookupTablesConfig;
-  catalogUrl: string;
 }
 
 type OpsTriggerConfigType = commonBoilerplateV3Type & { externalServices: ExternalServicesConfig; paths: PathsConfig };
@@ -39,8 +41,10 @@ const opsTriggerConfigSchema = {
         },
         externalServices: {
           type: 'object',
-          required: ['lookupTables', 'catalogUrl'],
+          required: ['storeTrigger', 'catalog', 'extractable', 'lookupTables'],
           properties: {
+            storeTrigger: { type: 'string' },
+            extractable: { type: 'string' },
             lookupTables: {
               type: 'object',
               required: ['url', 'subUrl'],
@@ -49,7 +53,7 @@ const opsTriggerConfigSchema = {
                 subUrl: { type: 'string' },
               },
             },
-            catalogUrl: { type: 'string' },
+            catalog: { type: 'string' },
           },
         },
       },

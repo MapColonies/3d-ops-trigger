@@ -5,6 +5,7 @@
 {{- $cloudProviderImagePullSecretName := include "ts-server-boilerplate.cloudProviderImagePullSecretName" . -}}
 {{- $imageTag := include "ts-server-boilerplate.tag" . -}}
 {{- $server := .Values.server -}}
+{{- $NFS := include "ts-server-boilerplate.NFS" . | fromYaml -}}
 {{- if .Values.enabled -}}
 apiVersion: apps/v1
 kind: Deployment
@@ -59,11 +60,11 @@ spec:
           {{- end }}
           {{- end }}
           volumeMounts:
-            {{- if .Values.NFS.name }}
+            {{- if $NFS.name }}
             - name: ingestion-storage
-              mountPath: {{ .Values.NFS.pv_path }}
-              {{- if .Values.NFS.sub_path }}
-              subPath: {{ .Values.NFS.sub_path }}
+              mountPath: {{ $NFS.pv_path }}
+              {{- if $NFS.sub_path }}
+              subPath: {{ $NFS.sub_path }}
               {{- end }}
             {{- end }}
             {{- if .Values.caSecretName }}
@@ -123,10 +124,10 @@ spec:
         {{ tpl (toYaml .Values.sidecars) . | nindent 8 }}
         {{- end }}
       volumes:
-        {{- if .Values.NFS.name }}
+        {{- if $NFS.name }}
         - name: ingestion-storage
           persistentVolumeClaim:
-            claimName: {{ .Values.NFS.name }}
+            claimName: {{ $NFS.name }}
         {{- end }}
         - name: nginx-config
           configMap:
