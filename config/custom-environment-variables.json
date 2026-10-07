@@ -1,7 +1,7 @@
 {
   "externalServices": {
     "catalogUrl": "CATALOG_URL",
-    "extractable": "EXTRACTABLE_URL",
+    "extractableUrl": "EXTRACTABLE_URL",
     "lookupTables": {
       "url": "LOOKUP_TABLES_URL",
       "subUrl": "LOOKUP_TABLES_SUB_URL"

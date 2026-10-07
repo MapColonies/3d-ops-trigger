@@ -8,7 +8,7 @@ interface LookupTablesConfig {
 
 interface ExternalServicesConfig {
   catalogUrl: string;
-  extractable: string;
+  extractableUrl: string;
   lookupTables: LookupTablesConfig;
 }
 
@@ -27,9 +27,9 @@ const opsTriggerConfigSchema = {
       properties: {
         externalServices: {
           type: 'object',
-          required: ['catalogUrl', 'extractable', 'lookupTables'],
+          required: ['catalogUrl', 'extractableUrl', 'lookupTables'],
           properties: {
-            extractable: { type: 'string' },
+            extractableUrl: { type: 'string' },
             lookupTables: {
               type: 'object',
               required: ['url', 'subUrl'],
