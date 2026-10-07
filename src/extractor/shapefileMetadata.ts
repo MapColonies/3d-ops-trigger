@@ -55,8 +55,8 @@ const validateFeature = (feature: Feature, index: number): string[] => {
     }
   }
 
-  const minResolution = properties[F.minResM];
-  const maxResolution = properties[F.maxResM];
+  const minResolution: unknown = properties[F.minResM];
+  const maxResolution: unknown = properties[F.maxResM];
   if (typeof minResolution === 'number' && typeof maxResolution === 'number' && minResolution > maxResolution) {
     errors.push(`${label}: ${F.minResM} must not be greater than ${F.maxResM}`);
   }
