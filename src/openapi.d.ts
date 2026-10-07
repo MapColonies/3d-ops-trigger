@@ -85,10 +85,6 @@ export type components = {
        * @example /shared/models/afula/shape/ShapeMetadata.shp
        */
       metadataShapefilePath: string;
-      /** @description Pre-filled from the prodName shapefile attribute, user editable */
-      productName: string;
-      /** @description Deterministic id derived from the prodID attribute and the storage id */
-      productId: string;
       /** @enum {string} */
       productType:
         | '3DPhotoRealistic'

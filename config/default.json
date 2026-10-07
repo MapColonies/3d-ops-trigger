@@ -32,5 +32,13 @@
         "options": null
       }
     }
+  },
+  "externalServices": {
+    "catalogUrl": "http://127.0.0.1:8080",
+    "extractableUrl": "http://127.0.0.1:8080",
+    "lookupTables": {
+      "url": "http://127.0.0.1:8080",
+      "subUrl": "lookup-tables/lookupData"
+    }
   }
 }
