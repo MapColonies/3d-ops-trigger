@@ -6,5 +6,9 @@
       "url": "LOOKUP_TABLES_URL",
       "subUrl": "LOOKUP_TABLES_SUB_URL"
     }
+  },
+  "paths": {
+    "basePath": "BASE_PATH",
+    "pvPath": "PV_SOURCE_PATH"
   }
 }

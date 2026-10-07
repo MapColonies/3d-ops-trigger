@@ -4,6 +4,8 @@ import type { LogContext } from '@map-colonies/3d-shared';
 import type { components } from '@openapi';
 import { SERVICES } from '@common/constants';
 import { ValidationManager } from '../../validator/validationManager';
+import { FilesValidator } from '../../validator/filesValidator';
+import { MetadataExtractor } from '../../extractor/metadataExtractor';
 
 export type IngestionPayload = components['schemas']['ingestionPayload'];
 export type UpdatePayload = components['schemas']['updatePayload'];
@@ -17,7 +19,9 @@ export class RecordManager {
 
   public constructor(
     @inject(SERVICES.LOGGER) private readonly logger: Logger,
-    @inject(ValidationManager) private readonly validator: ValidationManager
+    @inject(ValidationManager) private readonly validator: ValidationManager,
+    @inject(FilesValidator) private readonly filesValidator: FilesValidator,
+    @inject(MetadataExtractor) private readonly extractor: MetadataExtractor
   ) {
     this.logContext = {
       fileName: __filename,
@@ -28,7 +32,12 @@ export class RecordManager {
   public async createIngestion(payload: IngestionPayload): Promise<JobResponse> {
     const logContext = { ...this.logContext, function: this.createIngestion.name };
     this.logger.info({ msg: 'creating ingestion job', logContext, modelPath: payload.modelPath });
-    await this.validator.validateIngestion(payload);
+    const { modelPath, productShapefilePath, metadataShapefilePath, ...formFields } = payload;
+
+    const files = await this.filesValidator.validateIngestionFiles({ modelPath, productShapefilePath, metadataShapefilePath });
+    const { core, aggregation } = await this.extractor.extract(files);
+    this.validator.validateAggregation({ ...aggregation });
+    await this.validator.validateIngestion({ ...formFields, ...core, ...aggregation });
     return { jobId: 'stub-ingestion-job-id', status: 'PENDING' };
   }
 

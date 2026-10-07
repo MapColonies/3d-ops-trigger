@@ -71,18 +71,18 @@ export type components = {
     };
     ingestionPayload: {
       /**
-       * @description Path to the model inside the data/ folder - a tileset.json (3D Tiles) or a .3tz file
-       * @example /shared/models/afula/data/tileset.json
+       * @description Full share path (must start with the configured base path) to the model inside the data/ folder - a tileset.json (3D Tiles) or a .3tz file
+       * @example \\domtest\models\afula\data\tileset.json
        */
       modelPath: string;
       /**
-       * @description Path to the footprint shapefile (shape/Product.shp)
-       * @example /shared/models/afula/shape/Product.shp
+       * @description Full share path (must start with the configured base path) to the footprint shapefile (shape/Product.shp). .shx, .dbf, .prj (WGS84) and .cpg (UTF-8) must sit next to it
+       * @example \\domtest\models\afula\shape\Product.shp
        */
       productShapefilePath: string;
       /**
-       * @description Path to the parts metadata shapefile (shape/ShapeMetadata.shp)
-       * @example /shared/models/afula/shape/ShapeMetadata.shp
+       * @description Full share path (must start with the configured base path) to the parts metadata shapefile (shape/ShapeMetadata.shp). .shx, .dbf, .prj (WGS84) and .cpg (UTF-8) must sit next to it
+       * @example \\domtest\models\afula\shape\ShapeMetadata.shp
        */
       metadataShapefilePath: string;
       /** @enum {string} */
@@ -151,6 +151,15 @@ export interface operations {
       };
       /** @description Bad Request */
       400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['error'];
+        };
+      };
+      /** @description An external service (lookup-tables / catalog) failed */
+      500: {
         headers: {
           [name: string]: unknown;
         };

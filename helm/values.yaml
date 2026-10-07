@@ -1,5 +1,6 @@
 global:
   cloudProvider: {}
+  NFS: {}
   telemetry:
     tracing: {}
     logger:
@@ -78,12 +79,18 @@ server:
   responseCompressionEnabled: true
   requestPayloadLimit: 1mb
 
+NFS:
+  name: ''
+  pv_path: ''
+  sub_path: ''
+
 validations:
   lookupTables:
     url: ''
     subUrl: ''
 
 env:
+  basePath: ''
   catalog:
     url:
   extractable:

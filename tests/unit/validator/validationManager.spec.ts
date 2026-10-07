@@ -114,4 +114,32 @@ describe('ValidationManager', function () {
     expect(findRecords).toHaveBeenCalledWith({ productId: 'p-1' });
     expect(findRecords).toHaveBeenCalledWith({ productName: 'afula' });
   });
+
+  describe('validateAggregation', function () {
+    const validAggregation = (): Record<string, unknown> => ({
+      footprint: validMetadata().footprint,
+      imagingTimeBeginUTC: new Date('2025-07-05T00:00:00.000Z'),
+      imagingTimeEndUTC: new Date('2025-07-09T00:00:00.000Z'),
+      minResolutionMeter: 0.3,
+      maxResolutionMeter: 2,
+      maxAbsoluteAccuracyCEP90: 4,
+      maxAbsoluteAccuracyLEP90: 3,
+      sensors: ['UAV'],
+      productBoundingBox: '35.28,32.6,35.3,32.62',
+    });
+
+    it('should pass valid aggregated metadata', function () {
+      expect(() => validator.validateAggregation(validAggregation())).not.toThrow();
+    });
+
+    it('should throw 400 with the failing field when a value is out of range', function () {
+      expect(() => validator.validateAggregation({ ...validAggregation(), minResolutionMeter: 0 })).toThrow('minResolutionMeter');
+    });
+
+    it('should throw 400 when the imaging start is after the end', function () {
+      expect(() => validator.validateAggregation({ ...validAggregation(), imagingTimeBeginUTC: new Date('2025-08-01T00:00:00.000Z') })).toThrow(
+        ERROR_METADATA_DATE
+      );
+    });
+  });
 });

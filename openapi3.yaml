@@ -33,6 +33,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/error'
+        500:
+          description: An external service (lookup-tables / catalog) failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/error'
   /record/{id}:
     delete:
       operationId: deleteRecord
@@ -157,16 +163,16 @@ components:
       properties:
         modelPath:
           type: string
-          description: Path to the model inside the data/ folder - a tileset.json (3D Tiles) or a .3tz file
-          example: /shared/models/afula/data/tileset.json
+          description: Full share path (must start with the configured base path) to the model inside the data/ folder - a tileset.json (3D Tiles) or a .3tz file
+          example: '\\domtest\models\afula\data\tileset.json'
         productShapefilePath:
           type: string
-          description: Path to the footprint shapefile (shape/Product.shp)
-          example: /shared/models/afula/shape/Product.shp
+          description: Full share path (must start with the configured base path) to the footprint shapefile (shape/Product.shp). .shx, .dbf, .prj (WGS84) and .cpg (UTF-8) must sit next to it
+          example: '\\domtest\models\afula\shape\Product.shp'
         metadataShapefilePath:
           type: string
-          description: Path to the parts metadata shapefile (shape/ShapeMetadata.shp)
-          example: /shared/models/afula/shape/ShapeMetadata.shp
+          description: Full share path (must start with the configured base path) to the parts metadata shapefile (shape/ShapeMetadata.shp). .shx, .dbf, .prj (WGS84) and .cpg (UTF-8) must sit next to it
+          example: '\\domtest\models\afula\shape\ShapeMetadata.shp'
         productType:
           type: string
           enum:

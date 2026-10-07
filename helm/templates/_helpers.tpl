@@ -129,3 +129,9 @@ Usage: {{ include "ts-server-boilerplate.otelResourceAttributes" .resourceAttrib
 {{- join "," $attributes }}
 {{- end -}}
 
+{{/*
+Returns the NFS values, chart values first and global values for anything left empty
+*/}}
+{{- define "ts-server-boilerplate.NFS" -}}
+{{- toYaml (merge (deepCopy (.Values.NFS | default dict)) (.Values.global.NFS | default dict)) -}}
+{{- end -}}

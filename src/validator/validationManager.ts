@@ -1,7 +1,8 @@
 import type { Logger } from '@map-colonies/js-logger';
 import { StatusCodes } from 'http-status-codes';
 import { inject, injectable } from 'tsyringe';
-import { new3DLayerMetadataSchema, geometrySchema, AppError, type LogContext } from '@map-colonies/3d-shared';
+import { new3DLayerMetadataSchema, aggregation3DMetadataSchema, geometrySchema, AppError, type LogContext } from '@map-colonies/3d-shared';
+import type { ZodError } from 'zod';
 import { SERVICES } from '@common/constants';
 import { LookupTablesClient } from '../externalServices/lookupTables/lookupTablesClient';
 import { CatalogClient } from '../externalServices/catalog/catalogClient';
@@ -34,7 +35,7 @@ export class ValidationManager {
 
     const parsed = new3DLayerMetadataSchema.safeParse(metadata);
     if (!parsed.success) {
-      const message = parsed.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join('; ');
+      const message = this.formatIssues(parsed.error);
       this.logger.error({ msg: 'metadata schema validation failed', logContext, issues: message });
       throw new AppError('badRequest', StatusCodes.BAD_REQUEST, message, true);
     }
@@ -51,6 +52,22 @@ export class ValidationManager {
     await this.validateRegion(parsed.data.region);
     await this.validateProductIdUnique(parsed.data.productId);
     await this.validateProductNameUnique(parsed.data.productName);
+  }
+
+  public validateAggregation(aggregation: Record<string, unknown>): void {
+    const logContext = { ...this.logContext, function: this.validateAggregation.name };
+    this.logger.info({ msg: 'aggregated metadata validation start', logContext });
+
+    const parsed = aggregation3DMetadataSchema.safeParse(aggregation);
+    if (!parsed.success) {
+      const message = this.formatIssues(parsed.error);
+      this.logger.error({ msg: 'aggregated metadata validation failed', logContext, issues: message });
+      throw new AppError('badRequest', StatusCodes.BAD_REQUEST, message, true);
+    }
+  }
+
+  private formatIssues(error: ZodError): string {
+    return error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join('; ');
   }
 
   private async validateProductIdUnique(productId: string): Promise<void> {
