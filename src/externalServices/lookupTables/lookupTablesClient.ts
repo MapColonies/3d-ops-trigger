@@ -7,6 +7,11 @@ import { SERVICES } from '@common/constants';
 import type { ConfigType, LookupTablesConfig } from '@common/config';
 import type { ILookupOption } from './interfaces';
 
+const LOOKUP_KEYS = {
+  classification: 'classification',
+  countries: 'countries',
+} as const;
+
 @injectable()
 export class LookupTablesClient {
   private readonly logContext: LogContext;
@@ -24,17 +29,30 @@ export class LookupTablesClient {
   }
 
   public async getClassifications(): Promise<string[]> {
-    const logContext = { ...this.logContext, function: this.getClassifications.name };
-    this.logger.debug({ msg: 'Get Classifications from lookup-tables service', logContext });
-    try {
-      const response = await axios.get<ILookupOption[]>(`${this.lookupTables.url}/${this.lookupTables.subUrl}/classification`);
-      const classifications = response.data.map((item) => item.value);
-      this.logger.debug({ msg: 'Got Classifications', logContext, classifications });
+    return this.getLookupValues(LOOKUP_KEYS.classification);
+  }
 
-      return classifications;
+  public async getCountries(): Promise<string[]> {
+    return this.getLookupValues(LOOKUP_KEYS.countries);
+  }
+
+  private async getLookupValues(lookupKey: string): Promise<string[]> {
+    const logContext = { ...this.logContext, function: this.getLookupValues.name };
+    this.logger.debug({ msg: `Get ${lookupKey} from lookup-tables service`, logContext });
+    try {
+      const response = await axios.get<ILookupOption[]>(`${this.lookupTables.url}/${this.lookupTables.subUrl}/${lookupKey}`);
+      const values = response.data.map((item) => item.value);
+      this.logger.debug({ msg: `Got ${lookupKey}`, logContext, values });
+
+      return values;
     } catch (err) {
-      this.logger.error({ msg: 'something went wrong with lookup-tables service', logContext, err });
-      throw new AppError('lookup-tables', StatusCodes.INTERNAL_SERVER_ERROR, 'there is a problem with lookup-tables', true);
+      this.logger.error({ msg: 'something went wrong with lookup-tables service', logContext, err, lookupKey });
+      throw new AppError(
+        'lookup-tables',
+        StatusCodes.INTERNAL_SERVER_ERROR,
+        `there is a problem with lookup-tables while getting ${lookupKey}`,
+        true
+      );
     }
   }
 }
