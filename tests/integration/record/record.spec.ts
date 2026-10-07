@@ -1,29 +1,38 @@
 import { jsLogger } from '@map-colonies/js-logger';
-import { describe, beforeEach, it, expect, beforeAll, vi } from 'vitest';
+import { describe, beforeEach, afterEach, afterAll, it, expect, beforeAll } from 'vitest';
+import nock, { cleanAll, disableNetConnect, enableNetConnect } from 'nock';
 import { trace } from '@opentelemetry/api';
 import httpStatusCodes from 'http-status-codes';
 import { createRequestSender, type RequestSender } from '@map-colonies/openapi-supertest';
 import type { paths, operations } from '@openapi';
 import { getApp } from '@src/app';
 import { SERVICES } from '@common/constants';
-import type { InjectionObject } from '@common/dependencyRegistration';
 import { initConfig } from '@src/common/config';
 import type { IngestionPayload } from '@src/record/models/recordManager';
-import { LookupTablesClient } from '@src/externalServices/lookupTables/lookupTablesClient';
-import { CatalogClient } from '@src/externalServices/catalog/catalogClient';
 
-const lookupStub = { getClassifications: vi.fn().mockResolvedValue(['4']) } as unknown as LookupTablesClient;
-const catalogStub = { findRecords: vi.fn().mockResolvedValue([]) } as unknown as CatalogClient;
-
-const validIngestionPayload: IngestionPayload = {
+const ingestionPayload: IngestionPayload = {
   modelPath: 'afula/data/tileset.json',
   productShapefilePath: 'afula/shape/Product.shp',
   metadataShapefilePath: 'afula/shape/ShapeMetadata.shp',
-  productName: 'afula',
-  productId: 'afula-1',
   productType: '3DPhotoRealistic',
   classification: '4',
   region: ['israel'],
+};
+
+const EXTERNAL_SERVICES_URL = 'http://127.0.0.1:8080';
+const LOOKUP_DATA_PATH = '/lookup-tables/lookupData';
+
+const mockLookupTables = (): void => {
+  nock(EXTERNAL_SERVICES_URL)
+    .persist()
+    .get(`${LOOKUP_DATA_PATH}/classification`)
+    .reply(httpStatusCodes.OK, [{ value: '4', translationCode: 'restricted' }])
+    .get(`${LOOKUP_DATA_PATH}/countries`)
+    .reply(httpStatusCodes.OK, [{ value: 'israel', translationCode: 'israel' }]);
+};
+
+const mockCatalogFind = (records: unknown[] = []): void => {
+  nock(EXTERNAL_SERVICES_URL).persist().post('/metadata/find').reply(httpStatusCodes.OK, records);
 };
 
 describe('record', function () {
@@ -31,29 +40,87 @@ describe('record', function () {
 
   beforeAll(async function () {
     await initConfig(true);
+    disableNetConnect();
+    enableNetConnect((host) => !host.startsWith('127.0.0.1:8080'));
   });
 
-  const buildRequestSender = async (extraOverrides: InjectionObject<unknown>[]): Promise<RequestSender<paths, operations>> => {
+  beforeEach(async function () {
     const [app] = await getApp({
       override: [
         { token: SERVICES.LOGGER, provider: { useValue: await jsLogger({ enabled: false }) } },
         { token: SERVICES.TRACER, provider: { useValue: trace.getTracer('testTracer') } },
-        { token: LookupTablesClient, provider: { useValue: lookupStub } },
-        { token: CatalogClient, provider: { useValue: catalogStub } },
-        ...extraOverrides,
       ],
       useChild: true,
     });
-    return createRequestSender<paths, operations>('openapi3.yaml', app);
-  };
+    requestSender = await createRequestSender<paths, operations>('openapi3.yaml', app);
+  });
 
-  beforeEach(async function () {
-    requestSender = await buildRequestSender([]);
+  afterEach(function () {
+    cleanAll();
+  });
+
+  afterAll(function () {
+    enableNetConnect();
   });
 
   describe('POST /record', function () {
-    it('should return 201 and a job response for a valid ingestion request', async function () {
-      const response = await requestSender.createRecord({ requestBody: validIngestionPayload });
+    it.each(['modelPath', 'productShapefilePath', 'metadataShapefilePath', 'productType', 'classification', 'region'] as const)(
+      'should return 400 when the required field %s is missing',
+      async function (field) {
+        const requestBody: Partial<IngestionPayload> = { ...ingestionPayload };
+        delete requestBody[field];
+
+        const response = await requestSender.createRecord({ requestBody: requestBody as IngestionPayload });
+
+        expect(response).toSatisfyApiSpec();
+        expect(response.status).toBe(httpStatusCodes.BAD_REQUEST);
+        expect(response.body).toHaveProperty('message', expect.stringContaining(field));
+      }
+    );
+
+    it.each([
+      ['productType is not in the enum', { productType: 'NOT_A_3D_TYPE' }, 'productType'],
+      ['region is empty', { region: [] }, 'region'],
+      ['region is not an array', { region: 'israel' }, 'region'],
+      ['region contains a non string', { region: [1] }, 'region'],
+      ['classification has invalid characters', { classification: '4-a' }, 'classification'],
+      ['modelPath is not a string', { modelPath: 123 }, 'modelPath'],
+      ['productSubType is not a string', { productSubType: 5 }, 'productSubType'],
+    ])('should return 400 when %s', async function (_case, override, field) {
+      const response = await requestSender.createRecord({ requestBody: { ...ingestionPayload, ...override } as IngestionPayload });
+
+      expect(response).toSatisfyApiSpec();
+      expect(response.status).toBe(httpStatusCodes.BAD_REQUEST);
+      expect(response.body).toHaveProperty('message', expect.stringContaining(field));
+    });
+
+    it.each([
+      ['an unknown field', { unknownField: 'x' }],
+      ['productName', { productName: 'afula' }],
+      ['productId', { productId: 'afula-1' }],
+    ])('should return 400 when %s is sent', async function (_case, extraField) {
+      const response = await requestSender.createRecord({ requestBody: { ...ingestionPayload, ...extraField } });
+
+      expect(response).toSatisfyApiSpec();
+      expect(response.status).toBe(httpStatusCodes.BAD_REQUEST);
+      expect(response.body).toHaveProperty('message', 'request/body must NOT have additional properties');
+    });
+
+    it('should return 400 when the body is empty', async function () {
+      const response = await requestSender.createRecord({ requestBody: {} as IngestionPayload });
+
+      expect(response).toSatisfyApiSpec();
+      expect(response.status).toBe(httpStatusCodes.BAD_REQUEST);
+    });
+
+    it.each([
+      ['a tileset.json model', 'afula/data/tileset.json'],
+      ['a .3tz model', 'afula/data/model.3tz'],
+    ])('should return 201 and a job response for %s', async function (_case, modelPath) {
+      mockLookupTables();
+      mockCatalogFind();
+
+      const response = await requestSender.createRecord({ requestBody: { ...ingestionPayload, modelPath } });
 
       expect(response).toSatisfyApiSpec();
       expect(response.status).toBe(httpStatusCodes.CREATED);
@@ -64,25 +131,8 @@ describe('record', function () {
       expect(body.status).toBeTypeOf('string');
     });
 
-    it('should return 400 when a required field is missing', async function () {
-      const response = await requestSender.createRecord({
-        // @ts-expect-error intentionally invalid: missing shapefile paths and metadata fields
-        requestBody: { modelPath: 'afula/data/tileset.json' },
-      });
-
-      expect(response).toSatisfyApiSpec();
-      expect(response.status).toBe(httpStatusCodes.BAD_REQUEST);
-    });
-
-    it('should return 201 for a valid .3tz model', async function () {
-      const response = await requestSender.createRecord({ requestBody: { ...validIngestionPayload, modelPath: 'afula/data/model.3tz' } });
-
-      expect(response).toSatisfyApiSpec();
-      expect(response.status).toBe(httpStatusCodes.CREATED);
-    });
-
     it('should return 400 when a model file does not exist', async function () {
-      const response = await requestSender.createRecord({ requestBody: { ...validIngestionPayload, modelPath: 'afula/data/missing.json' } });
+      const response = await requestSender.createRecord({ requestBody: { ...ingestionPayload, modelPath: 'afula/data/missing.json' } });
 
       expect(response).toSatisfyApiSpec();
       expect(response.status).toBe(httpStatusCodes.BAD_REQUEST);
@@ -90,17 +140,53 @@ describe('record', function () {
     });
 
     it('should return 400 when a path escapes the storage base path', async function () {
-      const response = await requestSender.createRecord({ requestBody: { ...validIngestionPayload, modelPath: '../afula/data/tileset.json' } });
+      const response = await requestSender.createRecord({ requestBody: { ...ingestionPayload, modelPath: '../afula/data/tileset.json' } });
 
       expect(response).toSatisfyApiSpec();
       expect(response.status).toBe(httpStatusCodes.BAD_REQUEST);
+      expect(response.body).toHaveProperty('message', expect.stringContaining('storage base path'));
     });
 
-    it('should return 400 when metadata fails business validation', async function () {
-      const response = await requestSender.createRecord({ requestBody: { ...validIngestionPayload, classification: 'notInLookup' } });
+    it('should return 400 when the classification is not in the lookup table', async function () {
+      mockLookupTables();
+      mockCatalogFind();
+
+      const response = await requestSender.createRecord({ requestBody: { ...ingestionPayload, classification: 'notInLookup' } });
 
       expect(response).toSatisfyApiSpec();
       expect(response.status).toBe(httpStatusCodes.BAD_REQUEST);
+      expect(response.body).toHaveProperty('message', expect.stringContaining('classification is not a valid value'));
+    });
+
+    it('should return 400 when a region is not in the countries lookup table', async function () {
+      mockLookupTables();
+      mockCatalogFind();
+
+      const response = await requestSender.createRecord({ requestBody: { ...ingestionPayload, region: ['israel', 'Atlantis'] } });
+
+      expect(response).toSatisfyApiSpec();
+      expect(response.status).toBe(httpStatusCodes.BAD_REQUEST);
+      expect(response.body).toHaveProperty('message', expect.stringContaining('region contains invalid values: Atlantis'));
+    });
+
+    it('should return 400 when the product already exists in the catalog', async function () {
+      mockLookupTables();
+      mockCatalogFind([{ id: 'existing', productId: 'AFL', productName: 'afula' }]);
+
+      const response = await requestSender.createRecord({ requestBody: ingestionPayload });
+
+      expect(response).toSatisfyApiSpec();
+      expect(response.status).toBe(httpStatusCodes.BAD_REQUEST);
+      expect(response.body).toHaveProperty('message', 'product id is not unique!');
+    });
+
+    it('should return 500 when the lookup-tables service is down', async function () {
+      nock(EXTERNAL_SERVICES_URL).get(`${LOOKUP_DATA_PATH}/classification`).reply(httpStatusCodes.SERVICE_UNAVAILABLE);
+
+      const response = await requestSender.createRecord({ requestBody: ingestionPayload });
+
+      expect(response).toSatisfyApiSpec();
+      expect(response.status).toBe(httpStatusCodes.INTERNAL_SERVER_ERROR);
     });
   });
 
@@ -125,6 +211,16 @@ describe('record', function () {
       expect(response.status).toBe(httpStatusCodes.OK);
       expect(response.body.message).toBeTypeOf('string');
     });
+
+    it('should return 400 when the body is not an object', async function () {
+      const response = await requestSender.updateRecord({
+        pathParams: { id: 'rec-1' },
+        requestBody: ['description'] as unknown as Record<string, never>,
+      });
+
+      expect(response).toSatisfyApiSpec();
+      expect(response.status).toBe(httpStatusCodes.BAD_REQUEST);
+    });
   });
 
   describe('PATCH /record/status/{id}', function () {
@@ -144,6 +240,17 @@ describe('record', function () {
 
       expect(response).toSatisfyApiSpec();
       expect(response.status).toBe(httpStatusCodes.BAD_REQUEST);
+    });
+
+    it('should return 400 when the status is missing', async function () {
+      const response = await requestSender.updateRecordStatus({
+        pathParams: { id: 'rec-1' },
+        requestBody: {} as { status: 'PUBLISHED' },
+      });
+
+      expect(response).toSatisfyApiSpec();
+      expect(response.status).toBe(httpStatusCodes.BAD_REQUEST);
+      expect(response.body).toHaveProperty('message', expect.stringContaining('status'));
     });
   });
 });

@@ -1,6 +1,8 @@
 import type { MultiPolygon, Polygon } from 'geojson';
 
 export interface ExtractedCoreMetadata {
+  productId: string;
+  productName: string;
   srsId: string;
   srsName: string;
   producerName: string;

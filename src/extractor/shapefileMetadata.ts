@@ -6,9 +6,8 @@ const F = SHAPE_METADATA_FIELDS;
 const MANDATORY_NUMBERS = [F.minResM, F.maxResM, F.absCep90, F.absLep90] as const;
 const OPTIONAL_NUMBERS = [F.absSep90, F.relCep90, F.relLep90, F.relSep90] as const;
 const MANDATORY_DATES = [F.dateStart, F.dateEnd, F.prodDate] as const;
-const MANDATORY_STRINGS = [F.sensors, F.srsId, F.srsName, F.producer, F.prodSys, F.prodVer] as const;
-/** attributes mapped 1:1 to a single global field, so every part must carry the same value */
-const UNIFORM_STRINGS = [F.srsId, F.srsName, F.producer, F.prodSys, F.prodVer] as const;
+const MANDATORY_STRINGS = [F.prodID, F.prodName, F.sensors, F.srsId, F.srsName, F.producer, F.prodSys, F.prodVer] as const;
+const UNIFORM_STRINGS = [F.prodID, F.prodName, F.srsId, F.srsName, F.producer, F.prodSys, F.prodVer] as const;
 const SENSORS_SEPARATOR = ',';
 
 type Properties = Record<string, unknown>;
@@ -18,7 +17,6 @@ const isPolygonal = (geometry: Geometry | null): geometry is Polygon | MultiPoly
 
 const isEmpty = (value: unknown): boolean => value === undefined || value === null || (typeof value === 'string' && value.trim() === '');
 
-/** DBF "D" fields are read as local-midnight Dates; re-anchor them to UTC midnight so the date does not shift by the server timezone */
 const toUtcDate = (value: unknown): Date | undefined => {
   if (value instanceof Date) {
     return Number.isNaN(value.getTime()) ? undefined : new Date(Date.UTC(value.getFullYear(), value.getMonth(), value.getDate()));
@@ -96,11 +94,6 @@ const distinctSensors = (propertiesList: Properties[]): string[] => [
   ),
 ];
 
-/**
- * Maps Product.shp + ShapeMetadata.shp into layer metadata, applying the Confluence aggregation rules
- * (MIN dateStart / MAX dateEnd, MIN minResM / MAX maxResM, MAX accuracies, distinct sensors).
- * Returns every row-level problem at once ("all or nothing").
- */
 const extractMetadata = (product: FeatureCollection, shapeMetadata: FeatureCollection): ExtractionResult => {
   const errors: string[] = [];
 
@@ -132,6 +125,8 @@ const extractMetadata = (product: FeatureCollection, shapeMetadata: FeatureColle
     success: true,
     data: {
       core: {
+        productId: String(first[F.prodID]),
+        productName: String(first[F.prodName]),
         srsId: String(first[F.srsId]),
         srsName: String(first[F.srsName]),
         producerName: String(first[F.producer]),

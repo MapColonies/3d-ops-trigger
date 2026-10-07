@@ -33,6 +33,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/error'
+        500:
+          description: An external service (lookup-tables / catalog) failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/error'
   /record/{id}:
     delete:
       operationId: deleteRecord
@@ -151,8 +157,6 @@ components:
         - modelPath
         - productShapefilePath
         - metadataShapefilePath
-        - productName
-        - productId
         - productType
         - classification
         - region
@@ -169,13 +173,6 @@ components:
           type: string
           description: Path (relative to the storage base path) to the parts metadata shapefile (shape/ShapeMetadata.shp). .shx, .dbf, .prj (WGS84) and .cpg (UTF-8) must sit next to it
           example: afula/shape/ShapeMetadata.shp
-        productName:
-          type: string
-          maxLength: 120
-          description: Pre-filled from the prodName shapefile attribute, user editable
-        productId:
-          type: string
-          description: Deterministic id derived from the prodID attribute and the storage id
         productType:
           type: string
           enum:

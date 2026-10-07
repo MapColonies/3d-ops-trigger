@@ -31,6 +31,8 @@ describe('MetadataExtractor', function () {
     const { core, aggregation } = await extractor.extract(filesOf(FIXTURE));
 
     expect(core).toEqual({
+      productId: 'AFL',
+      productName: 'afula',
       srsId: '4326',
       srsName: 'WGS84GEO',
       producerName: 'IDFMU',

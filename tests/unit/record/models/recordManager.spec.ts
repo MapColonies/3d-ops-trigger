@@ -32,8 +32,6 @@ describe('RecordManager', function () {
         modelPath: 'afula/data/tileset.json',
         productShapefilePath: 'afula/shape/Product.shp',
         metadataShapefilePath: 'afula/shape/ShapeMetadata.shp',
-        productName: 'afula',
-        productId: 'afula-1',
         productType: '3DPhotoRealistic',
         classification: '4',
         region: ['israel'],
@@ -51,8 +49,6 @@ describe('RecordManager', function () {
       expect(extractor.extract).toHaveBeenCalledWith(files);
       expect(validator.validateAggregation).toHaveBeenCalledWith(extracted.aggregation);
       expect(validator.validateIngestion).toHaveBeenCalledWith({
-        productName: 'afula',
-        productId: 'afula-1',
         productType: '3DPhotoRealistic',
         classification: '4',
         region: ['israel'],
@@ -69,8 +65,6 @@ describe('RecordManager', function () {
           modelPath: 'afula/data/tileset.json',
           productShapefilePath: 'afula/shape/Product.shp',
           metadataShapefilePath: 'afula/shape/ShapeMetadata.shp',
-          productName: 'afula',
-          productId: 'afula-1',
           productType: '3DPhotoRealistic',
           classification: '4',
           region: ['israel'],

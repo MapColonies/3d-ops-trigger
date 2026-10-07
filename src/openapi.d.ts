@@ -85,10 +85,6 @@ export type components = {
        * @example afula/shape/ShapeMetadata.shp
        */
       metadataShapefilePath: string;
-      /** @description Pre-filled from the prodName shapefile attribute, user editable */
-      productName: string;
-      /** @description Deterministic id derived from the prodID attribute and the storage id */
-      productId: string;
       /** @enum {string} */
       productType:
         | '3DPhotoRealistic'
@@ -155,6 +151,15 @@ export interface operations {
       };
       /** @description Bad Request */
       400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['error'];
+        };
+      };
+      /** @description An external service (lookup-tables / catalog) failed */
+      500: {
         headers: {
           [name: string]: unknown;
         };

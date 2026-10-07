@@ -1,5 +1,6 @@
-/** ShapeMetadata.shp attribute short names (Confluence "Field Mapping Cross-Reference") */
 export const SHAPE_METADATA_FIELDS = {
+  prodID: 'prodID',
+  prodName: 'prodName',
   dateStart: 'dateStart',
   dateEnd: 'dateEnd',
   minResM: 'minResM',

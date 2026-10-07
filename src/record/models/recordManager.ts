@@ -31,7 +31,7 @@ export class RecordManager {
 
   public async createIngestion(payload: IngestionPayload): Promise<JobResponse> {
     const logContext = { ...this.logContext, function: this.createIngestion.name };
-    this.logger.info({ msg: 'creating ingestion job', logContext, productId: payload.productId, modelPath: payload.modelPath });
+    this.logger.info({ msg: 'creating ingestion job', logContext, modelPath: payload.modelPath });
     const { modelPath, productShapefilePath, metadataShapefilePath, ...formFields } = payload;
 
     const files = await this.filesValidator.validateIngestionFiles({ modelPath, productShapefilePath, metadataShapefilePath });

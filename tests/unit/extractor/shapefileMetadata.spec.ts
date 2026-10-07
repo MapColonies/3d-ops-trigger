@@ -21,6 +21,8 @@ const collection = (features: Feature[]): FeatureCollection => ({ type: 'Feature
 const feature = (geometry: Geometry, properties: Record<string, unknown> = {}): Feature => ({ type: 'Feature', geometry, properties });
 
 const part = (overrides: Record<string, unknown> = {}): Record<string, unknown> => ({
+  prodID: 'AFL',
+  prodName: 'afula',
   dateStart: new Date(2025, 6, 6),
   dateEnd: new Date(2025, 6, 8),
   minResM: 0.5,
@@ -72,6 +74,8 @@ describe('extractMetadata', function () {
     ]);
 
     expect(core).toEqual({
+      productId: 'AFL',
+      productName: 'afula',
       srsId: '4326',
       srsName: 'WGS84GEO',
       producerName: 'IDFMU',
@@ -146,9 +150,13 @@ describe('extractMetadata', function () {
   });
 
   it('should require directly mapped attributes to be identical across parts', function () {
-    const metadata = collection([feature(square(35.28, 32.6), part()), feature(square(35.29, 32.6), part({ srsName: 'OTHER', prodSys: 'other' }))]);
+    const metadata = collection([
+      feature(square(35.28, 32.6), part()),
+      feature(square(35.29, 32.6), part({ prodID: 'OTHER', srsName: 'OTHER', prodSys: 'other' })),
+    ]);
 
     expect(errorsOf(product, metadata)).toEqual([
+      'ShapeMetadata: prodID must be identical across all features',
       'ShapeMetadata: srsName must be identical across all features',
       'ShapeMetadata: prodSys must be identical across all features',
     ]);
