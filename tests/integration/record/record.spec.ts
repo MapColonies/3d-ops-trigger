@@ -1,5 +1,5 @@
 import { jsLogger } from '@map-colonies/js-logger';
-import { describe, it, expect, beforeAll, afterEach, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterEach } from 'vitest';
 import nock, { cleanAll, disableNetConnect, enableNetConnect } from 'nock';
 import { trace } from '@opentelemetry/api';
 import httpStatusCodes from 'http-status-codes';
@@ -7,7 +7,7 @@ import { createRequestSender, type RequestSender } from '@map-colonies/openapi-s
 import type { paths, operations } from '@openapi';
 import { getApp } from '@src/app';
 import { SERVICES } from '@common/constants';
-import { initConfig } from '@src/common/config';
+import { getConfig, initConfig, type LookupTablesConfig } from '@src/common/config';
 import type { IngestionPayload } from '@src/record/models/recordManager';
 
 const ingestionPayload: IngestionPayload = {
@@ -19,15 +19,14 @@ const ingestionPayload: IngestionPayload = {
   region: ['israel'],
 };
 
-const LOOKUP_TABLES_URL = 'http://127.0.0.1:8080';
-const LOOKUP_DATA_PATH = '/lookup-tables/lookupData';
+let lookupTables: LookupTablesConfig;
 
 const mockLookupTables = (): void => {
-  nock(LOOKUP_TABLES_URL)
+  nock(lookupTables.url)
     .persist()
-    .get(`${LOOKUP_DATA_PATH}/classification`)
+    .get(`/${lookupTables.subUrl}/classification`)
     .reply(httpStatusCodes.OK, [{ value: '4', translationCode: 'restricted' }])
-    .get(`${LOOKUP_DATA_PATH}/countries`)
+    .get(`/${lookupTables.subUrl}/countries`)
     .reply(httpStatusCodes.OK, [{ value: 'israel', translationCode: 'israel' }]);
 };
 
@@ -36,8 +35,10 @@ describe('record', function () {
 
   beforeAll(async function () {
     await initConfig(true);
+    lookupTables = getConfig().get('externalServices.lookupTables');
+    const lookupTablesHost = new URL(lookupTables.url).host;
     disableNetConnect();
-    enableNetConnect((host) => !host.startsWith('127.0.0.1:8080'));
+    enableNetConnect((host) => host !== lookupTablesHost);
 
     const [app] = await getApp({
       override: [
@@ -53,10 +54,6 @@ describe('record', function () {
     cleanAll();
   });
 
-  afterAll(function () {
-    enableNetConnect();
-  });
-
   describe('POST /record', function () {
     describe('Happy Path 🙂', function () {
       it('should return 201 and a job response for a valid ingestion request', async function () {
@@ -67,10 +64,8 @@ describe('record', function () {
         expect(response).toSatisfyApiSpec();
         expect(response.status).toBe(httpStatusCodes.CREATED);
 
-        const body = response.body as paths['/record']['post']['responses']['201']['content']['application/json'];
-
-        expect(body.jobId).toBeTypeOf('string');
-        expect(body.status).toBeTypeOf('string');
+        expect(response.body).toMatchObject({ status: 'PENDING' });
+        expect(response.body).toHaveProperty('jobId');
       });
     });
 
@@ -147,7 +142,7 @@ describe('record', function () {
 
     describe('Sad Path 😥', function () {
       it('should return 500 when the lookup-tables service is down', async function () {
-        nock(LOOKUP_TABLES_URL).get(`${LOOKUP_DATA_PATH}/classification`).reply(httpStatusCodes.SERVICE_UNAVAILABLE);
+        nock(lookupTables.url).get(`/${lookupTables.subUrl}/classification`).reply(httpStatusCodes.SERVICE_UNAVAILABLE);
 
         const response = await requestSender.createRecord({ requestBody: ingestionPayload });
 
@@ -165,9 +160,8 @@ describe('record', function () {
         expect(response).toSatisfyApiSpec();
         expect(response.status).toBe(httpStatusCodes.OK);
 
-        const body = response.body as paths['/record/{id}']['delete']['responses']['200']['content']['application/json'];
-
-        expect(body.jobId).toBeTypeOf('string');
+        expect(response.body).toMatchObject({ status: 'PENDING' });
+        expect(response.body).toHaveProperty('jobId');
       });
     });
   });

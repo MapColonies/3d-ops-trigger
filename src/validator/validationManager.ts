@@ -20,7 +20,7 @@ export class ValidationManager {
     };
   }
 
-  public async validateIngestion(payload: Pick<IngestionPayload, 'classification' | 'region'>): Promise<void> {
+  public async validateIngestion(payload: IngestionPayload): Promise<void> {
     const logContext = { ...this.logContext, function: this.validateIngestion.name };
     this.logger.info({ msg: 'ingestion validation start', logContext });
 

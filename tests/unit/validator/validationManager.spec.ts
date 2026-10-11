@@ -3,8 +3,16 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { AppError } from '@map-colonies/3d-shared';
 import { ValidationManager } from '@src/validator/validationManager';
 import type { LookupTablesClient } from '@src/externalServices/lookupTables/lookupTablesClient';
+import type { IngestionPayload } from '@src/record/models/recordManager';
 
-const validPayload = { classification: 'abc123', region: ['ישראל'] };
+const validPayload: IngestionPayload = {
+  modelPath: '/shared/models/afula/data/tileset.json',
+  productShapefilePath: '/shared/models/afula/shape/Product.shp',
+  metadataShapefilePath: '/shared/models/afula/shape/ShapeMetadata.shp',
+  productType: '3DPhotoRealistic',
+  classification: 'abc123',
+  region: ['ישראל'],
+};
 
 describe('ValidationManager', function () {
   let validator: ValidationManager;
