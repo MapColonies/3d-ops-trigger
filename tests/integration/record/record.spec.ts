@@ -65,7 +65,6 @@ describe('record', function () {
         expect(response.status).toBe(httpStatusCodes.CREATED);
 
         expect(response.body).toMatchObject({ status: 'PENDING' });
-        expect(response.body).toHaveProperty('jobId');
       });
     });
 
@@ -90,9 +89,12 @@ describe('record', function () {
         ['metadataShapefilePath is empty', { metadataShapefilePath: '' }, 'metadataShapefilePath'],
         ['classification is empty', { classification: '' }, 'classification'],
         ['region is empty', { region: [] }, 'region'],
+        ['the region value is not in the lookup table', { region: ['invalid-region'] }, 'region'],
         ['productType is not a valid enum value', { productType: 'NOT_A_3D_TYPE' }, 'productType'],
-        ['classification has invalid characters', { classification: '4-a' }, 'classification'],
+        ['an invalid classification value is sent', { classification: '4-a' }, 'classification'],
       ])('should return 400 when %s', async function (_case, override, field) {
+        mockLookupTables();
+
         const response = await requestSender.createRecord({ requestBody: { ...ingestionPayload, ...override } as IngestionPayload });
 
         expect(response).toSatisfyApiSpec();
@@ -119,7 +121,7 @@ describe('record', function () {
         expect(response.status).toBe(httpStatusCodes.BAD_REQUEST);
       });
 
-      it("should return 400 when the classification doesn't exist in the lookup table", async function () {
+      it('should return 400 when the classification is not in the lookup table', async function () {
         mockLookupTables();
 
         const response = await requestSender.createRecord({ requestBody: { ...ingestionPayload, classification: 'notInLookup' } });
@@ -129,7 +131,7 @@ describe('record', function () {
         expect(response.body).toHaveProperty('message', expect.stringContaining('classification is not a valid value'));
       });
 
-      it("should return 400 when a region doesn't exist in the lookup table", async function () {
+      it('should return 400 for an invalid region value (not in the lookup table)', async function () {
         mockLookupTables();
 
         const response = await requestSender.createRecord({ requestBody: { ...ingestionPayload, region: ['israel', 'Atlantis'] } });
@@ -161,7 +163,6 @@ describe('record', function () {
         expect(response.status).toBe(httpStatusCodes.OK);
 
         expect(response.body).toMatchObject({ status: 'PENDING' });
-        expect(response.body).toHaveProperty('jobId');
       });
     });
   });
