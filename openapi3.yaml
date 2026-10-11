@@ -33,6 +33,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/error'
+        500:
+          description: An external service (lookup-tables) failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/error'
   /record/{id}:
     delete:
       operationId: deleteRecord
@@ -157,14 +163,17 @@ components:
       properties:
         modelPath:
           type: string
+          minLength: 1
           description: Path to the model inside the data/ folder - a tileset.json (3D Tiles) or a .3tz file
           example: /shared/models/afula/data/tileset.json
         productShapefilePath:
           type: string
+          minLength: 1
           description: Path to the footprint shapefile (shape/Product.shp)
           example: /shared/models/afula/shape/Product.shp
         metadataShapefilePath:
           type: string
+          minLength: 1
           description: Path to the parts metadata shapefile (shape/ShapeMetadata.shp)
           example: /shared/models/afula/shape/ShapeMetadata.shp
         productType:

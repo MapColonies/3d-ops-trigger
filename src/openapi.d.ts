@@ -158,6 +158,15 @@ export interface operations {
           'application/json': components['schemas']['error'];
         };
       };
+      /** @description An external service (lookup-tables) failed */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['error'];
+        };
+      };
     };
   };
   deleteRecord: {
