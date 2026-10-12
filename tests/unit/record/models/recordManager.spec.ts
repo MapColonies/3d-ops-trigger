@@ -1,28 +1,29 @@
 import { jsLogger } from '@map-colonies/js-logger';
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { RecordManager, type IngestionPayload } from '@src/record/models/recordManager';
+import type { ValidationManager } from '@src/validator/validationManager';
+
+const noopValidator = { validateIngestion: vi.fn().mockResolvedValue(undefined) } as unknown as ValidationManager;
 
 describe('RecordManager', function () {
   let manager: RecordManager;
 
   beforeEach(async function () {
-    manager = new RecordManager(await jsLogger({ enabled: false }));
+    manager = new RecordManager(await jsLogger({ enabled: false }), noopValidator);
   });
 
   describe('createIngestion', function () {
-    it('should return a job response with a jobId and status', function () {
+    it('should return a job response with a jobId and status', async function () {
       const payload: IngestionPayload = {
         modelPath: '/shared/models/afula/data/tileset.json',
         productShapefilePath: '/shared/models/afula/shape/Product.shp',
         metadataShapefilePath: '/shared/models/afula/shape/ShapeMetadata.shp',
-        productName: 'afula',
-        productId: 'afula-1',
         productType: '3DPhotoRealistic',
         classification: '4',
         region: ['israel'],
       };
 
-      const result = manager.createIngestion(payload);
+      const result = await manager.createIngestion(payload);
 
       expect(result.jobId).toBeTypeOf('string');
       expect(result.status).toBeTypeOf('string');

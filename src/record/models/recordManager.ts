@@ -1,8 +1,9 @@
 import type { Logger } from '@map-colonies/js-logger';
 import { inject, injectable } from 'tsyringe';
+import type { LogContext } from '@map-colonies/3d-shared';
 import type { components } from '@openapi';
 import { SERVICES } from '@common/constants';
-import type { LogContext } from '@common/interfaces';
+import { ValidationManager } from '../../validator/validationManager';
 
 export type IngestionPayload = components['schemas']['ingestionPayload'];
 export type UpdatePayload = components['schemas']['updatePayload'];
@@ -14,16 +15,20 @@ export type AckResponse = components['schemas']['ackResponse'];
 export class RecordManager {
   private readonly logContext: LogContext;
 
-  public constructor(@inject(SERVICES.LOGGER) private readonly logger: Logger) {
+  public constructor(
+    @inject(SERVICES.LOGGER) private readonly logger: Logger,
+    @inject(ValidationManager) private readonly validator: ValidationManager
+  ) {
     this.logContext = {
       fileName: __filename,
       class: RecordManager.name,
     };
   }
 
-  public createIngestion(payload: IngestionPayload): JobResponse {
+  public async createIngestion(payload: IngestionPayload): Promise<JobResponse> {
     const logContext = { ...this.logContext, function: this.createIngestion.name };
-    this.logger.info({ msg: 'creating ingestion job', logContext, productId: payload.productId, modelPath: payload.modelPath });
+    this.logger.info({ msg: 'creating ingestion job', logContext, modelPath: payload.modelPath });
+    await this.validator.validateIngestion(payload);
     return { jobId: 'stub-ingestion-job-id', status: 'PENDING' };
   }
 

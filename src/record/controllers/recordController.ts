@@ -1,9 +1,9 @@
 import type { Logger } from '@map-colonies/js-logger';
 import { StatusCodes } from 'http-status-codes';
 import { injectable, inject } from 'tsyringe';
+import type { LogContext } from '@map-colonies/3d-shared';
 import type { TypedRequestHandlers } from '@openapi';
 import { SERVICES } from '@common/constants';
-import type { LogContext } from '@common/interfaces';
 import { RecordManager } from '../models/recordManager';
 
 @injectable()
@@ -20,10 +20,10 @@ export class RecordController {
     };
   }
 
-  public createRecord: TypedRequestHandlers['createRecord'] = (req, res, next) => {
+  public createRecord: TypedRequestHandlers['createRecord'] = async (req, res, next) => {
     const logContext = { ...this.logContext, function: this.createRecord.name };
     try {
-      const job = this.manager.createIngestion(req.body);
+      const job = await this.manager.createIngestion(req.body);
       return res.status(StatusCodes.CREATED).json(job);
     } catch (err) {
       this.logger.error({ msg: 'failed to create ingestion job', logContext, err });

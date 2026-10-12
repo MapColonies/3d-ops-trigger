@@ -78,6 +78,17 @@ server:
   responseCompressionEnabled: true
   requestPayloadLimit: 1mb
 
+validations:
+  lookupTables:
+    url: ''
+    subUrl: ''
+
+env:
+  catalog:
+    url:
+  extractable:
+    url:
+
 telemetry:
   logger:
     level: info

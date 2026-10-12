@@ -1,21 +1,58 @@
 import { type ConfigInstance, config } from '@map-colonies/config';
 import { commonBoilerplateV3, type commonBoilerplateV3Type } from '@map-colonies/schemas';
 
-// Choose here the type of the config instance and import this type from the entire application
-type ConfigType = ConfigInstance<commonBoilerplateV3Type>;
+interface LookupTablesConfig {
+  url: string;
+  subUrl: string;
+}
+
+interface ExternalServicesConfig {
+  catalogUrl: string;
+  extractableUrl: string;
+  lookupTables: LookupTablesConfig;
+}
+
+type OpsTriggerConfigType = commonBoilerplateV3Type & { externalServices: ExternalServicesConfig };
+
+type ConfigType = ConfigInstance<OpsTriggerConfigType>;
+
+const opsTriggerConfigSchema = {
+  $id: 'https://mapcolonies.com/3d/opsTrigger/v1',
+  type: 'object',
+  allOf: [
+    { $ref: commonBoilerplateV3.$id },
+    {
+      type: 'object',
+      required: ['externalServices'],
+      properties: {
+        externalServices: {
+          type: 'object',
+          required: ['catalogUrl', 'extractableUrl', 'lookupTables'],
+          properties: {
+            extractableUrl: { type: 'string' },
+            lookupTables: {
+              type: 'object',
+              required: ['url', 'subUrl'],
+              properties: {
+                url: { type: 'string' },
+                subUrl: { type: 'string' },
+              },
+            },
+            catalogUrl: { type: 'string' },
+          },
+        },
+      },
+    },
+  ],
+};
 
 let configInstance: ConfigType | undefined;
 
-/**
- * Initializes the configuration by fetching it from the server.
- * This should only be called from the instrumentation file.
- * @returns A Promise that resolves when the configuration is successfully initialized.
- */
 async function initConfig(offlineMode?: boolean): Promise<void> {
-  configInstance = await config({
-    schema: commonBoilerplateV3,
+  configInstance = (await config({
+    schema: opsTriggerConfigSchema as unknown as typeof commonBoilerplateV3,
     offlineMode,
-  });
+  })) as unknown as ConfigType;
 }
 
 function getConfig(): ConfigType {
@@ -26,4 +63,4 @@ function getConfig(): ConfigType {
 }
 
 export { getConfig, initConfig };
-export type { ConfigType };
+export type { ConfigType, LookupTablesConfig, ExternalServicesConfig };
