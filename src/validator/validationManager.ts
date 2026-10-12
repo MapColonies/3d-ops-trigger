@@ -20,8 +20,8 @@ export class ValidationManager {
 
   public constructor(
     @inject(SERVICES.LOGGER) private readonly logger: Logger,
-    @inject(LookupTablesClient) private readonly lookupTables: LookupTablesClient,
-    @inject(CatalogClient) private readonly catalog: CatalogClient
+    @inject(LookupTablesClient) private readonly lookupTablesClient: LookupTablesClient,
+    @inject(CatalogClient) private readonly catalogClient: CatalogClient
   ) {
     this.logContext = {
       fileName: __filename,
@@ -72,7 +72,7 @@ export class ValidationManager {
 
   private async validateProductIdUnique(productId: string): Promise<void> {
     const logContext = { ...this.logContext, function: this.validateProductIdUnique.name };
-    const records = await this.catalog.findRecords({ productId });
+    const records = await this.catalogClient.findRecords({ productId });
     this.logger.debug({ msg: 'product id uniqueness validation', logContext, productId, matches: records.length });
 
     if (records.length > 0) {
@@ -88,7 +88,7 @@ export class ValidationManager {
 
   private async validateProductNameUnique(productName: string): Promise<void> {
     const logContext = { ...this.logContext, function: this.validateProductNameUnique.name };
-    const records = await this.catalog.findRecords({ productName });
+    const records = await this.catalogClient.findRecords({ productName });
     this.logger.debug({ msg: 'product name uniqueness validation', logContext, productName, matches: records.length });
 
     if (records.length > 0) {
@@ -124,7 +124,7 @@ export class ValidationManager {
 
   private async validateClassification(classification: string): Promise<void> {
     const logContext = { ...this.logContext, function: this.validateClassification.name };
-    const classifications = await this.lookupTables.getClassifications();
+    const classifications = await this.lookupTablesClient.getClassifications();
     this.logger.debug({ msg: 'classification validation', logContext, classifications });
 
     if (!classifications.includes(classification)) {
@@ -140,7 +140,7 @@ export class ValidationManager {
 
   private async validateRegion(region: string[]): Promise<void> {
     const logContext = { ...this.logContext, function: this.validateRegion.name };
-    const countries = await this.lookupTables.getCountries();
+    const countries = await this.lookupTablesClient.getCountries();
     const invalidRegions = region.filter((value) => !countries.includes(value));
     this.logger.debug({ msg: 'region validation', logContext, region, invalidRegions });
 

@@ -5,12 +5,7 @@ import { StatusCodes } from 'http-status-codes';
 import { AppError, type LogContext } from '@map-colonies/3d-shared';
 import { SERVICES } from '@common/constants';
 import type { ConfigType, LookupTablesConfig } from '@common/config';
-import type { ILookupOption } from './interfaces';
-
-const LOOKUP_KEYS = {
-  classification: 'classification',
-  countries: 'countries',
-} as const;
+import { LookupKey, type ILookupOption } from './interfaces';
 
 @injectable()
 export class LookupTablesClient {
@@ -29,14 +24,14 @@ export class LookupTablesClient {
   }
 
   public async getClassifications(): Promise<string[]> {
-    return this.getLookupValues(LOOKUP_KEYS.classification);
+    return this.getLookupValues(LookupKey.CLASSIFICATION);
   }
 
   public async getCountries(): Promise<string[]> {
-    return this.getLookupValues(LOOKUP_KEYS.countries);
+    return this.getLookupValues(LookupKey.COUNTRIES);
   }
 
-  private async getLookupValues(lookupKey: string): Promise<string[]> {
+  private async getLookupValues(lookupKey: LookupKey): Promise<string[]> {
     const logContext = { ...this.logContext, function: this.getLookupValues.name };
     this.logger.debug({ msg: `Get ${lookupKey} from lookup-tables service`, logContext });
     try {

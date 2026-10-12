@@ -163,14 +163,17 @@ components:
       properties:
         modelPath:
           type: string
+          minLength: 1
           description: Full share path (must start with the configured base path) to the model inside the data/ folder - a tileset.json (3D Tiles) or a .3tz file
           example: '\\domtest\models\afula\data\tileset.json'
         productShapefilePath:
           type: string
+          minLength: 1
           description: Full share path (must start with the configured base path) to the footprint shapefile (shape/Product.shp). .shx, .dbf, .prj (WGS84) and .cpg (UTF-8) must sit next to it
           example: '\\domtest\models\afula\shape\Product.shp'
         metadataShapefilePath:
           type: string
+          minLength: 1
           description: Full share path (must start with the configured base path) to the parts metadata shapefile (shape/ShapeMetadata.shp). .shx, .dbf, .prj (WGS84) and .cpg (UTF-8) must sit next to it
           example: '\\domtest\models\afula\shape\ShapeMetadata.shp'
         productType:
@@ -190,8 +193,10 @@ components:
         region:
           type: array
           minItems: 1
+          uniqueItems: true
           items:
             type: string
+            minLength: 1
         classification:
           type: string
           pattern: '^[a-zA-Z0-9]+$'

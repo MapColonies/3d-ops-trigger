@@ -12,8 +12,8 @@ interface PathsConfig {
 }
 
 interface ExternalServicesConfig {
-  catalog: string;
-  extractable: string;
+  catalogUrl: string;
+  extractableUrl: string;
   lookupTables: LookupTablesConfig;
 }
 
@@ -40,9 +40,9 @@ const opsTriggerConfigSchema = {
         },
         externalServices: {
           type: 'object',
-          required: ['catalog', 'extractable', 'lookupTables'],
+          required: ['catalogUrl', 'extractableUrl', 'lookupTables'],
           properties: {
-            extractable: { type: 'string' },
+            extractableUrl: { type: 'string' },
             lookupTables: {
               type: 'object',
               required: ['url', 'subUrl'],
@@ -51,7 +51,7 @@ const opsTriggerConfigSchema = {
                 subUrl: { type: 'string' },
               },
             },
-            catalog: { type: 'string' },
+            catalogUrl: { type: 'string' },
           },
         },
       },
