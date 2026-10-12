@@ -1,6 +1,6 @@
 import { jsLogger } from '@map-colonies/js-logger';
 import { describe, it, expect, beforeAll, afterEach } from 'vitest';
-import nock, { cleanAll, disableNetConnect, enableNetConnect } from 'nock';
+import nock from 'nock';
 import { trace } from '@opentelemetry/api';
 import httpStatusCodes from 'http-status-codes';
 import { createRequestSender, type RequestSender } from '@map-colonies/openapi-supertest';
@@ -37,8 +37,8 @@ describe('record', function () {
     await initConfig(true);
     lookupTables = getConfig().get('externalServices.lookupTables');
     const lookupTablesHost = new URL(lookupTables.url).host;
-    disableNetConnect();
-    enableNetConnect((host) => host !== lookupTablesHost);
+    nock.disableNetConnect();
+    nock.enableNetConnect((host) => host !== lookupTablesHost);
 
     const [app] = await getApp({
       override: [
@@ -51,7 +51,7 @@ describe('record', function () {
   });
 
   afterEach(function () {
-    cleanAll();
+    nock.cleanAll();
   });
 
   describe('POST /record', function () {
@@ -84,14 +84,17 @@ describe('record', function () {
       );
 
       it.each([
-        ['modelPath is empty', { modelPath: '' }, 'modelPath'],
-        ['productShapefilePath is empty', { productShapefilePath: '' }, 'productShapefilePath'],
-        ['metadataShapefilePath is empty', { metadataShapefilePath: '' }, 'metadataShapefilePath'],
+        ["modelPath can't be empty", { modelPath: '' }, 'modelPath'],
+        ["productShapefilePath can't be empty", { productShapefilePath: '' }, 'productShapefilePath'],
+        ["metadataShapefilePath can't be empty", { metadataShapefilePath: '' }, 'metadataShapefilePath'],
         ['classification is empty', { classification: '' }, 'classification'],
         ['region is empty', { region: [] }, 'region'],
-        ['the region value is not in the lookup table', { region: ['invalid-region'] }, 'region'],
-        ['productType is not a valid enum value', { productType: 'NOT_A_3D_TYPE' }, 'productType'],
-        ['an invalid classification value is sent', { classification: '4-a' }, 'classification'],
+        ["a region value can't be empty", { region: ['israel', ''] }, 'region/1'],
+        ['the classification value is not in the lookup table', { classification: 'notInLookup' }, 'classification'],
+        ['invalid region value', { region: ['invalid-region'] }, 'region'],
+        ['region values must be unique', { region: ['israel', 'israel'] }, 'region'],
+        ['invalid productType value', { productType: 'NOT_A_3D_TYPE' }, 'productType'],
+        ['invalid classification value', { classification: '4-a' }, 'classification'],
       ])('should return 400 when %s', async function (_case, override, field) {
         mockLookupTables();
 
@@ -119,26 +122,6 @@ describe('record', function () {
 
         expect(response).toSatisfyApiSpec();
         expect(response.status).toBe(httpStatusCodes.BAD_REQUEST);
-      });
-
-      it('should return 400 when the classification is not in the lookup table', async function () {
-        mockLookupTables();
-
-        const response = await requestSender.createRecord({ requestBody: { ...ingestionPayload, classification: 'notInLookup' } });
-
-        expect(response).toSatisfyApiSpec();
-        expect(response.status).toBe(httpStatusCodes.BAD_REQUEST);
-        expect(response.body).toHaveProperty('message', expect.stringContaining('classification is not a valid value'));
-      });
-
-      it('should return 400 for an invalid region value (not in the lookup table)', async function () {
-        mockLookupTables();
-
-        const response = await requestSender.createRecord({ requestBody: { ...ingestionPayload, region: ['israel', 'Atlantis'] } });
-
-        expect(response).toSatisfyApiSpec();
-        expect(response.status).toBe(httpStatusCodes.BAD_REQUEST);
-        expect(response.body).toHaveProperty('message', expect.stringContaining('region contains invalid values: Atlantis'));
       });
     });
 
