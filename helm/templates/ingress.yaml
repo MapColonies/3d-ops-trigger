@@ -1,5 +1,5 @@
 {{- if and (.Values.enabled) (.Values.ingress.enabled) -}}
-{{- $fullName := include "ts-server-boilerplate.fullname" . -}}
+{{- $fullName := include "3d-ops-trigger.fullname" . -}}
 {{- $serviceName := $fullName -}}
 {{- $servicePort := .Values.server.port -}}
 {{- $ingressPath := .Values.ingress.path -}}
@@ -11,7 +11,7 @@ metadata:
   name: {{ $fullName }}-ingress
   namespace: {{ .Release.Namespace }}
   labels:
-    {{- include "ts-server-boilerplate.labels" . | nindent 4 }}
+    {{- include "3d-ops-trigger.labels" . | nindent 4 }}
     {{- with .Values.ingress.labels }}
     {{- toYaml . | nindent 4 }}
     {{- end }}

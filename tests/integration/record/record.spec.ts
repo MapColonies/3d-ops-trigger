@@ -11,15 +11,16 @@ import { getConfig, initConfig, type LookupTablesConfig } from '@src/common/conf
 import type { IngestionPayload } from '@src/record/models/recordManager';
 
 const ingestionPayload: IngestionPayload = {
-  modelPath: '/shared/models/afula/data/tileset.json',
-  productShapefilePath: '/shared/models/afula/shape/Product.shp',
-  metadataShapefilePath: '/shared/models/afula/shape/ShapeMetadata.shp',
+  modelPath: '\\\\domtest\\models\\afula\\data\\tileset.json',
+  productShapefilePath: '\\\\domtest\\models\\afula\\shape\\Product.shp',
+  metadataShapefilePath: '\\\\domtest\\models\\afula\\shape\\ShapeMetadata.shp',
   productType: '3DPhotoRealistic',
   classification: '4',
   region: ['israel'],
 };
 
 let lookupTables: LookupTablesConfig;
+let catalogUrl: string;
 
 const mockLookupTables = (): void => {
   nock(lookupTables.url)
@@ -30,15 +31,20 @@ const mockLookupTables = (): void => {
     .reply(httpStatusCodes.OK, [{ value: 'israel', translationCode: 'israel' }]);
 };
 
+const mockCatalogFind = (records: unknown[] = []): void => {
+  nock(catalogUrl).persist().post('/metadata/find').reply(httpStatusCodes.OK, records);
+};
+
 describe('record', function () {
   let requestSender: RequestSender<paths, operations>;
 
   beforeAll(async function () {
     await initConfig(true);
     lookupTables = getConfig().get('externalServices.lookupTables');
-    const lookupTablesHost = new URL(lookupTables.url).host;
+    catalogUrl = getConfig().get('externalServices.catalogUrl');
+    const externalHosts = [new URL(lookupTables.url).host, new URL(catalogUrl).host];
     nock.disableNetConnect();
-    nock.enableNetConnect((host) => host !== lookupTablesHost);
+    nock.enableNetConnect((host) => !externalHosts.includes(host));
 
     const [app] = await getApp({
       override: [
@@ -56,14 +62,17 @@ describe('record', function () {
 
   describe('POST /record', function () {
     describe('Happy Path 🙂', function () {
-      it('should return 201 and a job response for a valid ingestion request', async function () {
+      it.each([
+        ['a tileset.json model', '\\\\domtest\\models\\afula\\data\\tileset.json'],
+        ['a .3tz model', '\\\\domtest\\models\\afula\\data\\model.3tz'],
+      ])('should return 201 and a job response for %s', async function (_case, modelPath) {
         mockLookupTables();
+        mockCatalogFind();
 
-        const response = await requestSender.createRecord({ requestBody: ingestionPayload });
+        const response = await requestSender.createRecord({ requestBody: { ...ingestionPayload, modelPath } });
 
         expect(response).toSatisfyApiSpec();
         expect(response.status).toBe(httpStatusCodes.CREATED);
-
         expect(response.body).toMatchObject({ status: 'PENDING' });
       });
     });
@@ -123,11 +132,52 @@ describe('record', function () {
         expect(response).toSatisfyApiSpec();
         expect(response.status).toBe(httpStatusCodes.BAD_REQUEST);
       });
+
+      it('should return 400 when a model file does not exist', async function () {
+        const response = await requestSender.createRecord({
+          requestBody: { ...ingestionPayload, modelPath: '\\\\domtest\\models\\afula\\data\\missing.json' },
+        });
+
+        expect(response).toSatisfyApiSpec();
+        expect(response.status).toBe(httpStatusCodes.BAD_REQUEST);
+        expect(response.body).toHaveProperty('message', 'missing files: afula/data/missing.json');
+      });
+
+      it('should return 400 when a path is not under the base path', async function () {
+        const response = await requestSender.createRecord({
+          requestBody: { ...ingestionPayload, modelPath: '\\\\other\\share\\afula\\data\\tileset.json' },
+        });
+
+        expect(response).toSatisfyApiSpec();
+        expect(response.status).toBe(httpStatusCodes.BAD_REQUEST);
+        expect(response.body).toHaveProperty('message', expect.stringContaining("isn't in the agreed folder"));
+      });
+
+      it('should return 400 when the product already exists in the catalog', async function () {
+        mockLookupTables();
+        mockCatalogFind([{ id: 'existing', productId: 'AFL', productName: 'afula' }]);
+
+        const response = await requestSender.createRecord({ requestBody: ingestionPayload });
+
+        expect(response).toSatisfyApiSpec();
+        expect(response.status).toBe(httpStatusCodes.BAD_REQUEST);
+        expect(response.body).toHaveProperty('message', 'product id is not unique!');
+      });
     });
 
     describe('Sad Path 😥', function () {
       it('should return 500 when the lookup-tables service is down', async function () {
         nock(lookupTables.url).get(`/${lookupTables.subUrl}/classification`).reply(httpStatusCodes.SERVICE_UNAVAILABLE);
+
+        const response = await requestSender.createRecord({ requestBody: ingestionPayload });
+
+        expect(response).toSatisfyApiSpec();
+        expect(response.status).toBe(httpStatusCodes.INTERNAL_SERVER_ERROR);
+      });
+
+      it('should return 500 when the catalog service is down', async function () {
+        mockLookupTables();
+        nock(catalogUrl).post('/metadata/find').reply(httpStatusCodes.SERVICE_UNAVAILABLE);
 
         const response = await requestSender.createRecord({ requestBody: ingestionPayload });
 
