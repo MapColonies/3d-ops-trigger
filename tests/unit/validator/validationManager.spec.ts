@@ -3,15 +3,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { StatusCodes } from 'http-status-codes';
 import { AppError } from '@map-colonies/3d-shared';
 import type { IFindRecordsPayload } from '@map-colonies/3d-shared';
-import {
-  ValidationManager,
-  ERROR_METADATA_DATE,
-  ERROR_METADATA_FOOTPRINT,
-  ERROR_METADATA_MISSING_DATE,
-  ERROR_METADATA_INVALID_DATE,
-  ERROR_METADATA_PRODUCT_ID_UNIQUE,
-  ERROR_METADATA_PRODUCT_NAME_UNIQUE,
-} from '@src/validator/validationManager';
+import { ValidationManager, ERROR_METADATA_PRODUCT_ID_UNIQUE, ERROR_METADATA_PRODUCT_NAME_UNIQUE } from '@src/validator/validationManager';
 import type { LookupTablesClient } from '@src/externalServices/lookupTables/lookupTablesClient';
 import type { CatalogClient } from '@src/externalServices/catalog/catalogClient';
 import { buildValidMetadata as validMetadata } from '@tests/helpers/metadata';
@@ -57,31 +49,6 @@ describe('ValidationManager', function () {
     expect((thrown as AppError).status).toBe(StatusCodes.BAD_REQUEST);
   });
 
-  it('should throw the footprint error for a malformed geometry', async function () {
-    const metadata = { ...validMetadata(), footprint: { type: 'Point', coordinates: [34.45, 31.48] } };
-
-    await expect(validator.validateIngestion(metadata)).rejects.toThrow(ERROR_METADATA_FOOTPRINT);
-  });
-
-  it('should throw the date error when imagingTimeBeginUTC is after imagingTimeEndUTC', async function () {
-    const metadata = { ...validMetadata(), imagingTimeBeginUTC: '2025-07-11T00:00:00.000Z' };
-
-    await expect(validator.validateIngestion(metadata)).rejects.toThrow(ERROR_METADATA_DATE);
-  });
-
-  it('should throw the missing-date error when a source date is absent', async function () {
-    const metadata = validMetadata();
-    delete metadata.imagingTimeEndUTC;
-
-    await expect(validator.validateIngestion(metadata)).rejects.toThrow(ERROR_METADATA_MISSING_DATE);
-  });
-
-  it('should throw the invalid-date error for an unparseable date', async function () {
-    const metadata = { ...validMetadata(), imagingTimeBeginUTC: 'not-a-date' };
-
-    await expect(validator.validateIngestion(metadata)).rejects.toThrow(ERROR_METADATA_INVALID_DATE);
-  });
-
   it('should throw 400 when the classification is not in the lookup table', async function () {
     const metadata = { ...validMetadata(), classification: 'not-a-real-classification' };
 
@@ -113,33 +80,5 @@ describe('ValidationManager', function () {
 
     expect(findRecords).toHaveBeenCalledWith({ productId: 'p-1' });
     expect(findRecords).toHaveBeenCalledWith({ productName: 'afula' });
-  });
-
-  describe('validateAggregation', function () {
-    const validAggregation = (): Record<string, unknown> => ({
-      footprint: validMetadata().footprint,
-      imagingTimeBeginUTC: new Date('2025-07-05T00:00:00.000Z'),
-      imagingTimeEndUTC: new Date('2025-07-09T00:00:00.000Z'),
-      minResolutionMeter: 0.3,
-      maxResolutionMeter: 2,
-      maxAbsoluteAccuracyCEP90: 4,
-      maxAbsoluteAccuracyLEP90: 3,
-      sensors: ['UAV'],
-      productBoundingBox: '35.28,32.6,35.3,32.62',
-    });
-
-    it('should pass valid aggregated metadata', function () {
-      expect(() => validator.validateAggregation(validAggregation())).not.toThrow();
-    });
-
-    it('should throw 400 with the failing field when a value is out of range', function () {
-      expect(() => validator.validateAggregation({ ...validAggregation(), minResolutionMeter: 0 })).toThrow('minResolutionMeter');
-    });
-
-    it('should throw 400 when the imaging start is after the end', function () {
-      expect(() => validator.validateAggregation({ ...validAggregation(), imagingTimeBeginUTC: new Date('2025-08-01T00:00:00.000Z') })).toThrow(
-        ERROR_METADATA_DATE
-      );
-    });
   });
 });

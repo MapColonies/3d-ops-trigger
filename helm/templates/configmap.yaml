@@ -31,6 +31,7 @@ data:
   {{- end }}
   {{- end }}
   npm_config_cache: /tmp/
+  PRODUCT_READER_MAX_VERTICES_PER_CHUNK: {{ .Values.env.productReader.maxVerticesPerChunk | quote }}
   BASE_PATH: {{ tpl .Values.env.basePath . | quote }}
   PV_SOURCE_PATH: {{ $NFS.pv_path | quote }}
   CATALOG_URL: {{ .Values.env.catalog.url | default (printf "http://%s-catalog" .Release.Name) }}

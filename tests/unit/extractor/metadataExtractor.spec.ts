@@ -27,10 +27,10 @@ describe('MetadataExtractor', function () {
     extractor = new MetadataExtractor(await jsLogger({ enabled: false }));
   });
 
-  it('should extract and aggregate the fixture shapefiles', async function () {
-    const { core, aggregation } = await extractor.extract(filesOf(FIXTURE));
+  it('should extract the common metadata from the first row of the fixture shapefile', async function () {
+    const metadata = await extractor.extract(filesOf(FIXTURE));
 
-    expect(core).toEqual({
+    expect(metadata).toEqual({
       productId: 'AFL',
       productName: 'afula',
       srsId: '4326',
@@ -39,19 +39,6 @@ describe('MetadataExtractor', function () {
       productionSystem: 'sys',
       productionSystemVersion: '1',
       productionDate: '2025-07-10T00:00:00.000Z',
-    });
-    expect(aggregation).toMatchObject({
-      footprint: { type: 'Polygon' },
-      imagingTimeBeginUTC: new Date('2025-07-05T00:00:00.000Z'),
-      imagingTimeEndUTC: new Date('2025-07-09T00:00:00.000Z'),
-      minResolutionMeter: 0.3,
-      maxResolutionMeter: 2,
-      maxAbsoluteAccuracyCEP90: 4,
-      maxAbsoluteAccuracyLEP90: 3,
-      maxRelativeAccuracyCEP90: 1,
-      maxRelativeAccuracyLEP90: 2.5,
-      sensors: ['OTHER', 'UAV'],
-      productBoundingBox: '35.28,32.6,35.3,32.62',
     });
   });
 
@@ -68,20 +55,20 @@ describe('MetadataExtractor', function () {
     });
 
     it('should throw a 400 AppError naming the unreadable file', async function () {
-      await writeFile(join(folder, 'shape/Product.shp'), 'garbage');
+      await writeFile(join(folder, 'shape/ShapeMetadata.shp'), 'garbage');
 
       const promise = extractor.extract(filesOf(folder));
 
       await expect(promise).rejects.toThrow(AppError);
-      await expect(promise).rejects.toThrow('Product.shp: shapefile is corrupted or unreadable');
+      await expect(promise).rejects.toThrow('ShapeMetadata.shp: shapefile is corrupted or unreadable');
     });
   });
 
-  it('should throw a 400 AppError when the extracted metadata is invalid', async function () {
+  it('should throw a 400 AppError when the first row misses the common attributes', async function () {
     const files = filesOf(FIXTURE);
-    // the footprint shapefile used as parts metadata has none of the mandatory attributes
     const promise = extractor.extract({ ...files, metadata: files.product });
 
-    await expect(promise).rejects.toThrow('ShapeMetadata feature 1: minResM is mandatory');
+    await expect(promise).rejects.toThrow(AppError);
+    await expect(promise).rejects.toThrow('ShapeMetadata: prodID is mandatory');
   });
 });

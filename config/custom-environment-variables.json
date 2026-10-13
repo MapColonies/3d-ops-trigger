@@ -7,6 +7,12 @@
       "subUrl": "LOOKUP_TABLES_SUB_URL"
     }
   },
+  "productReader": {
+    "maxVerticesPerChunk": {
+      "__name": "PRODUCT_READER_MAX_VERTICES_PER_CHUNK",
+      "__format": "number"
+    }
+  },
   "paths": {
     "basePath": "BASE_PATH",
     "pvPath": "PV_SOURCE_PATH"

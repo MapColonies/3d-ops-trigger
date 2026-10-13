@@ -41,6 +41,9 @@
       "subUrl": "lookup-tables/lookupData"
     }
   },
+  "productReader": {
+    "maxVerticesPerChunk": 10000
+  },
   "paths": {
     "basePath": "\\\\domtest\\mimi\\archi\\maz\\silver\\libot",
     "pvPath": "/home/3DModels"

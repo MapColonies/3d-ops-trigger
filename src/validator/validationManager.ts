@@ -1,16 +1,12 @@
 import type { Logger } from '@map-colonies/js-logger';
 import { StatusCodes } from 'http-status-codes';
 import { inject, injectable } from 'tsyringe';
-import { new3DLayerMetadataSchema, aggregation3DMetadataSchema, geometrySchema, AppError, type LogContext } from '@map-colonies/3d-shared';
+import { new3DLayerMetadataSchema, AppError, type LogContext } from '@map-colonies/3d-shared';
 import type { ZodError } from 'zod';
 import { SERVICES } from '@common/constants';
 import { LookupTablesClient } from '../externalServices/lookupTables/lookupTablesClient';
 import { CatalogClient } from '../externalServices/catalog/catalogClient';
 
-export const ERROR_METADATA_DATE = 'imagingTimeBeginUTC must not be later than imagingTimeEndUTC';
-export const ERROR_METADATA_MISSING_DATE = 'imagingTimeBeginUTC and imagingTimeEndUTC are required';
-export const ERROR_METADATA_INVALID_DATE = 'imagingTimeBeginUTC and imagingTimeEndUTC must be valid dates';
-export const ERROR_METADATA_FOOTPRINT = 'Invalid footprint! Must be a GeoJSON Polygon or MultiPolygon with all-2D or all-3D coordinates';
 export const ERROR_METADATA_PRODUCT_NAME_UNIQUE = 'product name is not unique!';
 export const ERROR_METADATA_PRODUCT_ID_UNIQUE = 'product id is not unique!';
 
@@ -40,30 +36,10 @@ export class ValidationManager {
       throw new AppError('badRequest', StatusCodes.BAD_REQUEST, message, true);
     }
 
-    const footprintResult = geometrySchema.safeParse(metadata.footprint);
-    if (!footprintResult.success) {
-      this.logger.error({ msg: 'invalid footprint geometry', logContext, footprint: metadata.footprint });
-      throw new AppError('badRequest', StatusCodes.BAD_REQUEST, ERROR_METADATA_FOOTPRINT, true);
-    }
-
-    this.validateDates(metadata.imagingTimeBeginUTC, metadata.imagingTimeEndUTC);
-
     await this.validateClassification(parsed.data.classification);
     await this.validateRegion(parsed.data.region);
     await this.validateProductIdUnique(parsed.data.productId);
     await this.validateProductNameUnique(parsed.data.productName);
-  }
-
-  public validateAggregation(aggregation: Record<string, unknown>): void {
-    const logContext = { ...this.logContext, function: this.validateAggregation.name };
-    this.logger.info({ msg: 'aggregated metadata validation start', logContext });
-
-    const parsed = aggregation3DMetadataSchema.safeParse(aggregation);
-    if (!parsed.success) {
-      const message = this.formatIssues(parsed.error);
-      this.logger.error({ msg: 'aggregated metadata validation failed', logContext, issues: message });
-      throw new AppError('badRequest', StatusCodes.BAD_REQUEST, message, true);
-    }
   }
 
   private formatIssues(error: ZodError): string {
@@ -99,26 +75,6 @@ export class ValidationManager {
         existingRecordIds: records.map((record) => record.id),
       });
       throw new AppError('badRequest', StatusCodes.BAD_REQUEST, ERROR_METADATA_PRODUCT_NAME_UNIQUE, true);
-    }
-  }
-
-  private validateDates(start: unknown, end: unknown): void {
-    const logContext = { ...this.logContext, function: this.validateDates.name };
-    if (start === undefined || end === undefined) {
-      this.logger.error({ msg: 'imaging dates are missing', logContext, imagingTimeBeginUTC: start, imagingTimeEndUTC: end });
-      throw new AppError('badRequest', StatusCodes.BAD_REQUEST, ERROR_METADATA_MISSING_DATE, true);
-    }
-
-    const startTime = new Date(start as string).getTime();
-    const endTime = new Date(end as string).getTime();
-    if (Number.isNaN(startTime) || Number.isNaN(endTime)) {
-      this.logger.error({ msg: 'imaging dates are not valid dates', logContext, imagingTimeBeginUTC: start, imagingTimeEndUTC: end });
-      throw new AppError('badRequest', StatusCodes.BAD_REQUEST, ERROR_METADATA_INVALID_DATE, true);
-    }
-
-    if (startTime > endTime) {
-      this.logger.error({ msg: 'imaging start date is later than end date', logContext, imagingTimeBeginUTC: start, imagingTimeEndUTC: end });
-      throw new AppError('badRequest', StatusCodes.BAD_REQUEST, ERROR_METADATA_DATE, true);
     }
   }
 

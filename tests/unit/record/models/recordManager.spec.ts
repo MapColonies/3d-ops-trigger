@@ -4,25 +4,29 @@ import { RecordManager, type IngestionPayload } from '@src/record/models/recordM
 import type { ValidationManager } from '@src/validator/validationManager';
 import type { FilesValidator } from '@src/validator/filesValidator';
 import type { MetadataExtractor } from '@src/extractor/metadataExtractor';
+import type { ProductReader } from '@src/extractor/productReader';
 
 describe('RecordManager', function () {
   let manager: RecordManager;
-  let validator: { validateIngestion: ReturnType<typeof vi.fn>; validateAggregation: ReturnType<typeof vi.fn> };
+  let validator: { validateIngestion: ReturnType<typeof vi.fn> };
   let filesValidator: { validateIngestionFiles: ReturnType<typeof vi.fn> };
   let extractor: { extract: ReturnType<typeof vi.fn> };
+  let productReader: { read: ReturnType<typeof vi.fn> };
 
-  const files = { modelPath: '/models/afula/data/tileset.json', product: {}, metadata: {} };
-  const extracted = { core: { srsId: '4326' }, aggregation: { sensors: ['UAV'] } };
+  const files = { modelPath: '/models/afula/data/tileset.json', product: { shp: '/models/afula/shape/Product.shp' }, metadata: {} };
+  const extracted = { productId: 'p-1', srsId: '4326' };
 
   beforeEach(async function () {
-    validator = { validateIngestion: vi.fn().mockResolvedValue(undefined), validateAggregation: vi.fn() };
+    validator = { validateIngestion: vi.fn().mockResolvedValue(undefined) };
     filesValidator = { validateIngestionFiles: vi.fn().mockResolvedValue(files) };
     extractor = { extract: vi.fn().mockResolvedValue(extracted) };
+    productReader = { read: vi.fn().mockResolvedValue({ type: 'Polygon', coordinates: [] }) };
     manager = new RecordManager(
       await jsLogger({ enabled: false }),
       validator as unknown as ValidationManager,
       filesValidator as unknown as FilesValidator,
-      extractor as unknown as MetadataExtractor
+      extractor as unknown as MetadataExtractor,
+      productReader as unknown as ProductReader
     );
   });
 
@@ -46,15 +50,46 @@ describe('RecordManager', function () {
         productShapefilePath: payload.productShapefilePath,
         metadataShapefilePath: payload.metadataShapefilePath,
       });
+      expect(productReader.read).toHaveBeenCalledWith(files.product.shp);
       expect(extractor.extract).toHaveBeenCalledWith(files);
-      expect(validator.validateAggregation).toHaveBeenCalledWith(extracted.aggregation);
       expect(validator.validateIngestion).toHaveBeenCalledWith({
         productType: '3DPhotoRealistic',
         classification: '4',
         region: ['israel'],
-        ...extracted.core,
-        ...extracted.aggregation,
+        ...extracted,
       });
+    });
+
+    it('should reject when the product shapefile is invalid', async function () {
+      productReader.read.mockRejectedValue(new Error('invalid product'));
+
+      await expect(
+        manager.createIngestion({
+          modelPath: 'afula/data/tileset.json',
+          productShapefilePath: 'afula/shape/Product.shp',
+          metadataShapefilePath: 'afula/shape/ShapeMetadata.shp',
+          productType: '3DPhotoRealistic',
+          classification: '4',
+          region: ['israel'],
+        })
+      ).rejects.toThrow('invalid product');
+      expect(validator.validateIngestion).not.toHaveBeenCalled();
+    });
+
+    it('should reject when the metadata shapefile is invalid', async function () {
+      extractor.extract.mockRejectedValue(new Error('invalid metadata'));
+
+      await expect(
+        manager.createIngestion({
+          modelPath: 'afula/data/tileset.json',
+          productShapefilePath: 'afula/shape/Product.shp',
+          metadataShapefilePath: 'afula/shape/ShapeMetadata.shp',
+          productType: '3DPhotoRealistic',
+          classification: '4',
+          region: ['israel'],
+        })
+      ).rejects.toThrow('invalid metadata');
+      expect(validator.validateIngestion).not.toHaveBeenCalled();
     });
 
     it('should not extract metadata when the files are invalid', async function () {
@@ -70,6 +105,7 @@ describe('RecordManager', function () {
           region: ['israel'],
         })
       ).rejects.toThrow('missing files');
+      expect(productReader.read).not.toHaveBeenCalled();
       expect(extractor.extract).not.toHaveBeenCalled();
     });
   });

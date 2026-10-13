@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-magic-numbers */
 import { LAYER_3D_PRODUCT_TYPE_LIST } from '@map-colonies/3d-shared';
 
 export const buildValidMetadata = (): Record<string, unknown> => ({
@@ -13,16 +12,4 @@ export const buildValidMetadata = (): Record<string, unknown> => ({
   productionSystem: 'sys',
   productionSystemVersion: '1',
   productionDate: '2025-07-08T11:26:00.000Z',
-  footprint: {
-    type: 'Polygon',
-    coordinates: [
-      [
-        [34.45, 31.48],
-        [34.46, 31.48],
-        [34.45, 31.48],
-      ],
-    ],
-  },
-  imagingTimeBeginUTC: '2025-07-06T11:10:00.000Z',
-  imagingTimeEndUTC: '2025-07-10T11:10:00.000Z',
 });

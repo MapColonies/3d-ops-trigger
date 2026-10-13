@@ -11,13 +11,21 @@ interface PathsConfig {
   pvPath: string;
 }
 
+interface ProductReaderConfig {
+  maxVerticesPerChunk: number;
+}
+
 interface ExternalServicesConfig {
   catalogUrl: string;
   extractableUrl: string;
   lookupTables: LookupTablesConfig;
 }
 
-type OpsTriggerConfigType = commonBoilerplateV3Type & { externalServices: ExternalServicesConfig; paths: PathsConfig };
+type OpsTriggerConfigType = commonBoilerplateV3Type & {
+  externalServices: ExternalServicesConfig;
+  paths: PathsConfig;
+  productReader: ProductReaderConfig;
+};
 
 type ConfigType = ConfigInstance<OpsTriggerConfigType>;
 
@@ -28,7 +36,7 @@ const opsTriggerConfigSchema = {
     { $ref: commonBoilerplateV3.$id },
     {
       type: 'object',
-      required: ['externalServices', 'paths'],
+      required: ['externalServices', 'paths', 'productReader'],
       properties: {
         paths: {
           type: 'object',
@@ -36,6 +44,13 @@ const opsTriggerConfigSchema = {
           properties: {
             basePath: { type: 'string', minLength: 1 },
             pvPath: { type: 'string', minLength: 1 },
+          },
+        },
+        productReader: {
+          type: 'object',
+          required: ['maxVerticesPerChunk'],
+          properties: {
+            maxVerticesPerChunk: { type: 'integer', minimum: 1 },
           },
         },
         externalServices: {
@@ -76,4 +91,4 @@ function getConfig(): ConfigType {
 }
 
 export { getConfig, initConfig };
-export type { ConfigType, LookupTablesConfig, ExternalServicesConfig, PathsConfig };
+export type { ConfigType, LookupTablesConfig, ExternalServicesConfig, PathsConfig, ProductReaderConfig };
