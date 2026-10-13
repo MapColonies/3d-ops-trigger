@@ -20,8 +20,8 @@ export interface ExtractedAggregationMetadata {
   maxAbsoluteAccuracyCEP90: number;
   maxAbsoluteAccuracyLEP90: number;
   maxAbsoluteAccuracySEP90?: number;
-  maxRelativeAccuracyCEP90?: number;
-  maxRelativeAccuracyLEP90?: number;
+  maxRelativeAccuracyCEP90: number;
+  maxRelativeAccuracyLEP90: number;
   maxRelativeAccuracySEP90?: number;
   sensors: string[];
   productBoundingBox: string;

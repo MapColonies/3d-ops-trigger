@@ -1,13 +1,13 @@
 {{- $server := .Values.server -}}
 {{- $telemetry := .Values.telemetry -}}
-{{- $tracingUrl := include "ts-server-boilerplate.tracingUrl" . -}}
-{{- $opentelemetryLoggingUrl := include "ts-server-boilerplate.opentelemetryLoggingUrl" . -}}
-{{- $NFS := include "ts-server-boilerplate.NFS" . | fromYaml -}}
+{{- $tracingUrl := include "3d-ops-trigger.tracingUrl" . -}}
+{{- $opentelemetryLoggingUrl := include "3d-ops-trigger.opentelemetryLoggingUrl" . -}}
+{{- $NFS := include "3d-ops-trigger.NFS" . | fromYaml -}}
 {{- if .Values.enabled -}}
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: {{ include "ts-server-boilerplate.fullname" . }}
+  name: {{ include "3d-ops-trigger.fullname" . }}
 data:
   {{- with $server }}
   REQUEST_PAYLOAD_LIMIT: {{ .requestPayloadLimit | quote }}
@@ -21,7 +21,7 @@ data:
   OPENTELEMETRY_LOGGING_ENABLED: 'true'
   OTLP_LOGGER_ENDPOINT_URL: {{ $opentelemetryLoggingUrl | quote }}
   {{- if .resourceAttributes }}
-  OTEL_RESOURCE_ATTRIBUTES: {{ include "ts-server-boilerplate.otelResourceAttributes" .resourceAttributes | quote }}
+  OTEL_RESOURCE_ATTRIBUTES: {{ include "3d-ops-trigger.otelResourceAttributes" .resourceAttributes | quote }}
   {{- end }}
   {{- end }}
   {{- end }}

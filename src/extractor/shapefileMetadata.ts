@@ -2,12 +2,36 @@ import type { Feature, FeatureCollection, Geometry, MultiPolygon, Polygon, Posit
 import { ERROR_METADATA_NO_FEATURES, ERROR_NOT_POLYGON, ERROR_PRODUCT_SINGLE_FEATURE, SHAPE_METADATA_FIELDS } from './constants';
 import type { ExtractionResult } from './interfaces';
 
-const F = SHAPE_METADATA_FIELDS;
-const MANDATORY_NUMBERS = [F.minResM, F.maxResM, F.absCep90, F.absLep90] as const;
-const OPTIONAL_NUMBERS = [F.absSep90, F.relCep90, F.relLep90, F.relSep90] as const;
-const MANDATORY_DATES = [F.dateStart, F.dateEnd, F.prodDate] as const;
-const MANDATORY_STRINGS = [F.prodID, F.prodName, F.sensors, F.srsId, F.srsName, F.producer, F.prodSys, F.prodVer] as const;
-const UNIFORM_STRINGS = [F.prodID, F.prodName, F.srsId, F.srsName, F.producer, F.prodSys, F.prodVer] as const;
+const SHAPE_FIELDS = SHAPE_METADATA_FIELDS;
+const MANDATORY_NUMBERS = [
+  SHAPE_FIELDS.minResM,
+  SHAPE_FIELDS.maxResM,
+  SHAPE_FIELDS.absCep90,
+  SHAPE_FIELDS.absLep90,
+  SHAPE_FIELDS.relCep90,
+  SHAPE_FIELDS.relLep90,
+] as const;
+const OPTIONAL_NUMBERS = [SHAPE_FIELDS.absSep90, SHAPE_FIELDS.relSep90] as const;
+const MANDATORY_DATES = [SHAPE_FIELDS.dateStart, SHAPE_FIELDS.dateEnd, SHAPE_FIELDS.prodDate] as const;
+const MANDATORY_STRINGS = [
+  SHAPE_FIELDS.prodID,
+  SHAPE_FIELDS.prodName,
+  SHAPE_FIELDS.sensors,
+  SHAPE_FIELDS.srsId,
+  SHAPE_FIELDS.srsName,
+  SHAPE_FIELDS.producer,
+  SHAPE_FIELDS.prodSys,
+  SHAPE_FIELDS.prodVer,
+] as const;
+const UNIFORM_STRINGS = [
+  SHAPE_FIELDS.prodID,
+  SHAPE_FIELDS.prodName,
+  SHAPE_FIELDS.srsId,
+  SHAPE_FIELDS.srsName,
+  SHAPE_FIELDS.producer,
+  SHAPE_FIELDS.prodSys,
+  SHAPE_FIELDS.prodVer,
+] as const;
 const SENSORS_SEPARATOR = ',';
 
 type Properties = Record<string, unknown>;
@@ -55,16 +79,16 @@ const validateFeature = (feature: Feature, index: number): string[] => {
     }
   }
 
-  const minResolution: unknown = properties[F.minResM];
-  const maxResolution: unknown = properties[F.maxResM];
+  const minResolution: unknown = properties[SHAPE_FIELDS.minResM];
+  const maxResolution: unknown = properties[SHAPE_FIELDS.maxResM];
   if (typeof minResolution === 'number' && typeof maxResolution === 'number' && minResolution > maxResolution) {
-    errors.push(`${label}: ${F.minResM} must not be greater than ${F.maxResM}`);
+    errors.push(`${label}: ${SHAPE_FIELDS.minResM} must not be greater than ${SHAPE_FIELDS.maxResM}`);
   }
 
-  const dateStart = toUtcDate(properties[F.dateStart]);
-  const dateEnd = toUtcDate(properties[F.dateEnd]);
+  const dateStart = toUtcDate(properties[SHAPE_FIELDS.dateStart]);
+  const dateEnd = toUtcDate(properties[SHAPE_FIELDS.dateEnd]);
   if (dateStart !== undefined && dateEnd !== undefined && dateStart > dateEnd) {
-    errors.push(`${label}: ${F.dateStart} must not be later than ${F.dateEnd}`);
+    errors.push(`${label}: ${SHAPE_FIELDS.dateStart} must not be later than ${SHAPE_FIELDS.dateEnd}`);
   }
   return errors;
 };
@@ -98,7 +122,7 @@ const datesOf = (propertiesList: Properties[], field: string): number[] =>
 const distinctSensors = (propertiesList: Properties[]): string[] => [
   ...new Set(
     propertiesList.flatMap((properties) =>
-      String(properties[F.sensors])
+      String(properties[SHAPE_FIELDS.sensors])
         .split(SENSORS_SEPARATOR)
         .map((sensor) => sensor.trim())
         .filter((sensor) => sensor !== '')
@@ -137,27 +161,27 @@ const extractMetadata = (product: FeatureCollection, shapeMetadata: FeatureColle
     success: true,
     data: {
       core: {
-        productId: String(first[F.prodID]),
-        productName: String(first[F.prodName]),
-        srsId: String(first[F.srsId]),
-        srsName: String(first[F.srsName]),
-        producerName: String(first[F.producer]),
-        productionSystem: String(first[F.prodSys]),
-        productionSystemVersion: String(first[F.prodVer]),
-        productionDate: new Date(Math.max(...datesOf(propertiesList, F.prodDate))).toISOString(),
+        productId: String(first[SHAPE_FIELDS.prodID]),
+        productName: String(first[SHAPE_FIELDS.prodName]),
+        srsId: String(first[SHAPE_FIELDS.srsId]),
+        srsName: String(first[SHAPE_FIELDS.srsName]),
+        producerName: String(first[SHAPE_FIELDS.producer]),
+        productionSystem: String(first[SHAPE_FIELDS.prodSys]),
+        productionSystemVersion: String(first[SHAPE_FIELDS.prodVer]),
+        productionDate: new Date(Math.max(...datesOf(propertiesList, SHAPE_FIELDS.prodDate))).toISOString(),
       },
       aggregation: {
         footprint,
-        imagingTimeBeginUTC: new Date(Math.min(...datesOf(propertiesList, F.dateStart))),
-        imagingTimeEndUTC: new Date(Math.max(...datesOf(propertiesList, F.dateEnd))),
-        minResolutionMeter: Math.min(...numbersOf(propertiesList, F.minResM)),
-        maxResolutionMeter: Math.max(...numbersOf(propertiesList, F.maxResM)),
-        maxAbsoluteAccuracyCEP90: Math.max(...numbersOf(propertiesList, F.absCep90)),
-        maxAbsoluteAccuracyLEP90: Math.max(...numbersOf(propertiesList, F.absLep90)),
-        maxAbsoluteAccuracySEP90: maxOf(propertiesList, F.absSep90),
-        maxRelativeAccuracyCEP90: maxOf(propertiesList, F.relCep90),
-        maxRelativeAccuracyLEP90: maxOf(propertiesList, F.relLep90),
-        maxRelativeAccuracySEP90: maxOf(propertiesList, F.relSep90),
+        imagingTimeBeginUTC: new Date(Math.min(...datesOf(propertiesList, SHAPE_FIELDS.dateStart))),
+        imagingTimeEndUTC: new Date(Math.max(...datesOf(propertiesList, SHAPE_FIELDS.dateEnd))),
+        minResolutionMeter: Math.min(...numbersOf(propertiesList, SHAPE_FIELDS.minResM)),
+        maxResolutionMeter: Math.max(...numbersOf(propertiesList, SHAPE_FIELDS.maxResM)),
+        maxAbsoluteAccuracyCEP90: Math.max(...numbersOf(propertiesList, SHAPE_FIELDS.absCep90)),
+        maxAbsoluteAccuracyLEP90: Math.max(...numbersOf(propertiesList, SHAPE_FIELDS.absLep90)),
+        maxAbsoluteAccuracySEP90: maxOf(propertiesList, SHAPE_FIELDS.absSep90),
+        maxRelativeAccuracyCEP90: Math.max(...numbersOf(propertiesList, SHAPE_FIELDS.relCep90)),
+        maxRelativeAccuracyLEP90: Math.max(...numbersOf(propertiesList, SHAPE_FIELDS.relLep90)),
+        maxRelativeAccuracySEP90: maxOf(propertiesList, SHAPE_FIELDS.relSep90),
         sensors: distinctSensors(propertiesList),
         productBoundingBox: calculateBoundingBox(footprint),
       },

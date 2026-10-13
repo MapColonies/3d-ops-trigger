@@ -30,6 +30,7 @@ const part = (overrides: Record<string, unknown> = {}): Record<string, unknown> 
   absCep90: 2.5,
   absLep90: 3,
   relCep90: 1,
+  relLep90: 2,
   sensors: 'OTHER',
   srsId: '4326',
   srsName: 'WGS84GEO',
@@ -141,6 +142,12 @@ describe('extractMetadata', function () {
       'ShapeMetadata feature 2: minResM must be a number',
       'ShapeMetadata feature 2: prodDate must be a valid date',
     ]);
+  });
+
+  it('should require the relative CEP90 and LEP90 accuracies', function () {
+    const metadata = collection([feature(square(35.28, 32.6), part({ relCep90: null, relLep90: undefined }))]);
+
+    expect(errorsOf(product, metadata)).toEqual(['ShapeMetadata feature 1: relCep90 is mandatory', 'ShapeMetadata feature 1: relLep90 is mandatory']);
   });
 
   it('should reject a date stored as a number', function () {
