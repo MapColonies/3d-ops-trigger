@@ -1,3 +1,5 @@
+import type { ExtractedMetadata } from '../extractor/interfaces';
+
 export interface ShapefileFiles {
   shp: string;
   shx: string;
@@ -11,3 +13,5 @@ export interface IngestionFiles {
   product: ShapefileFiles;
   metadata: ShapefileFiles;
 }
+
+export type ProductIdentity = Pick<ExtractedMetadata, 'productId' | 'productName'>;

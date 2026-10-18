@@ -52,12 +52,10 @@ describe('RecordManager', function () {
       });
       expect(productReader.read).toHaveBeenCalledWith(files.product.shp);
       expect(extractor.extract).toHaveBeenCalledWith(files);
-      expect(validator.validateIngestion).toHaveBeenCalledWith({
-        productType: '3DPhotoRealistic',
-        classification: '4',
-        region: ['israel'],
-        ...extracted,
-      });
+      expect(validator.validateIngestion).toHaveBeenCalledWith(
+        { productType: '3DPhotoRealistic', classification: '4', region: ['israel'] },
+        extracted
+      );
     });
 
     it('should reject when the product shapefile is invalid', async function () {

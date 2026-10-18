@@ -6,6 +6,7 @@ import type { ZodError } from 'zod';
 import { SERVICES } from '@common/constants';
 import { LookupTablesClient } from '../externalServices/lookupTables/lookupTablesClient';
 import { CatalogClient } from '../externalServices/catalog/catalogClient';
+import type { ProductIdentity } from './interfaces';
 
 export const ERROR_METADATA_PRODUCT_NAME_UNIQUE = 'product name is not unique!';
 export const ERROR_METADATA_PRODUCT_ID_UNIQUE = 'product id is not unique!';
@@ -25,21 +26,27 @@ export class ValidationManager {
     };
   }
 
-  public async validateIngestion(metadata: Record<string, unknown>): Promise<void> {
+  public async validateIngestion(formFields: Record<string, unknown>, product: ProductIdentity): Promise<void> {
     const logContext = { ...this.logContext, function: this.validateIngestion.name };
     this.logger.info({ msg: 'ingestion validation start', logContext });
 
-    const parsed = new3DLayerMetadataSchema.safeParse(metadata);
+    const parsed = new3DLayerMetadataSchema.safeParse(formFields);
     if (!parsed.success) {
       const message = this.formatIssues(parsed.error);
       this.logger.error({ msg: 'metadata schema validation failed', logContext, issues: message });
       throw new AppError('badRequest', StatusCodes.BAD_REQUEST, message, true);
     }
 
-    await this.validateClassification(parsed.data.classification);
-    await this.validateRegion(parsed.data.region);
-    await this.validateProductIdUnique(parsed.data.productId);
-    await this.validateProductNameUnique(parsed.data.productName);
+    const results = await Promise.allSettled([
+      this.validateClassification(parsed.data.classification),
+      this.validateRegion(parsed.data.region),
+      this.validateProductIdUnique(product.productId),
+      this.validateProductNameUnique(product.productName),
+    ]);
+    const failure = results.find((result): result is PromiseRejectedResult => result.status === 'rejected');
+    if (failure) {
+      throw failure.reason as Error;
+    }
   }
 
   private formatIssues(error: ZodError): string {

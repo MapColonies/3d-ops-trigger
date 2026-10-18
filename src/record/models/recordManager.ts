@@ -38,7 +38,7 @@ export class RecordManager {
 
     const files = await this.filesValidator.validateIngestionFiles({ modelPath, productShapefilePath, metadataShapefilePath });
     const [, metadata] = await Promise.all([this.productReader.read(files.product.shp), this.extractor.extract(files)]);
-    await this.validator.validateIngestion({ ...formFields, ...metadata });
+    await this.validator.validateIngestion(formFields, metadata);
     return { jobId: 'stub-ingestion-job-id', status: 'PENDING' };
   }
 

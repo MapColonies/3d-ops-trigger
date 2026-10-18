@@ -6,12 +6,14 @@ import type { IFindRecordsPayload } from '@map-colonies/3d-shared';
 import { ValidationManager, ERROR_METADATA_PRODUCT_ID_UNIQUE, ERROR_METADATA_PRODUCT_NAME_UNIQUE } from '@src/validator/validationManager';
 import type { LookupTablesClient } from '@src/externalServices/lookupTables/lookupTablesClient';
 import type { CatalogClient } from '@src/externalServices/catalog/catalogClient';
-import { buildValidMetadata as validMetadata } from '@tests/helpers/metadata';
+import { buildValidFormFields as validForm, buildProductIdentity } from '@tests/helpers/metadata';
 
 const lookupStub = {
   getClassifications: vi.fn().mockResolvedValue(['abc123']),
   getCountries: vi.fn().mockResolvedValue(['ישראל', 'USA']),
 } as unknown as LookupTablesClient;
+
+const product = buildProductIdentity();
 
 describe('ValidationManager', function () {
   let validator: ValidationManager;
@@ -24,23 +26,23 @@ describe('ValidationManager', function () {
     validator = new ValidationManager(await jsLogger({ enabled: false }), lookupStub, catalogStub);
   });
 
-  it('should pass a fully valid metadata object', async function () {
-    await expect(validator.validateIngestion(validMetadata())).resolves.toBeUndefined();
+  it('should pass fully valid form fields and a unique product', async function () {
+    await expect(validator.validateIngestion(validForm(), product)).resolves.toBeUndefined();
   });
 
-  it('should throw 400 when a required core field is missing', async function () {
-    const metadata = validMetadata();
-    delete metadata.productName;
+  it('should throw 400 when a required form field is missing', async function () {
+    const metadata = validForm();
+    delete metadata.classification;
 
-    await expect(validator.validateIngestion(metadata)).rejects.toThrow(AppError);
+    await expect(validator.validateIngestion(metadata, product)).rejects.toThrow(AppError);
   });
 
   it('should throw 400 for an invalid productType', async function () {
-    const metadata = { ...validMetadata(), productType: 'NOT_A_3D_TYPE' };
+    const metadata = { ...validForm(), productType: 'NOT_A_3D_TYPE' };
 
     let thrown: unknown;
     try {
-      await validator.validateIngestion(metadata);
+      await validator.validateIngestion(metadata, product);
     } catch (err) {
       thrown = err;
     }
@@ -50,21 +52,21 @@ describe('ValidationManager', function () {
   });
 
   it('should throw 400 when the classification is not in the lookup table', async function () {
-    const metadata = { ...validMetadata(), classification: 'not-a-real-classification' };
+    const metadata = { ...validForm(), classification: 'not-a-real-classification' };
 
-    await expect(validator.validateIngestion(metadata)).rejects.toThrow(AppError);
+    await expect(validator.validateIngestion(metadata, product)).rejects.toThrow(AppError);
   });
 
   it('should throw 400 listing the regions that are not in the countries lookup table', async function () {
-    const metadata = { ...validMetadata(), region: ['ישראל', 'Atlantis', 'Mordor'] };
+    const metadata = { ...validForm(), region: ['ישראל', 'Atlantis', 'Mordor'] };
 
-    await expect(validator.validateIngestion(metadata)).rejects.toThrow('region contains invalid values: Atlantis,Mordor');
+    await expect(validator.validateIngestion(metadata, product)).rejects.toThrow('region contains invalid values: Atlantis,Mordor');
   });
 
   it('should throw 400 when the product id already exists in the catalog', async function () {
     findRecords.mockImplementation(async (payload) => Promise.resolve(payload.productId !== undefined ? [{ id: 'existing', productId: 'p-1' }] : []));
 
-    await expect(validator.validateIngestion(validMetadata())).rejects.toThrow(ERROR_METADATA_PRODUCT_ID_UNIQUE);
+    await expect(validator.validateIngestion(validForm(), product)).rejects.toThrow(ERROR_METADATA_PRODUCT_ID_UNIQUE);
   });
 
   it('should throw 400 when the product name already exists in the catalog', async function () {
@@ -72,11 +74,11 @@ describe('ValidationManager', function () {
       Promise.resolve(payload.productName !== undefined ? [{ id: 'existing', productName: 'afula' }] : [])
     );
 
-    await expect(validator.validateIngestion(validMetadata())).rejects.toThrow(ERROR_METADATA_PRODUCT_NAME_UNIQUE);
+    await expect(validator.validateIngestion(validForm(), product)).rejects.toThrow(ERROR_METADATA_PRODUCT_NAME_UNIQUE);
   });
 
   it('should query the catalog by product id and by product name', async function () {
-    await validator.validateIngestion(validMetadata());
+    await validator.validateIngestion(validForm(), product);
 
     expect(findRecords).toHaveBeenCalledWith({ productId: 'p-1' });
     expect(findRecords).toHaveBeenCalledWith({ productName: 'afula' });
