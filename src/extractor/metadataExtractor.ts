@@ -2,7 +2,7 @@ import { basename } from 'node:path';
 import type { Feature } from 'geojson';
 import type { Logger } from '@map-colonies/js-logger';
 import { StatusCodes } from 'http-status-codes';
-import { openShapefile } from '@map-colonies/shapefile-reader';
+import { openShapefile, type IShapefileSource, type ShapefileReadResult } from '@map-colonies/shapefile-reader';
 import { inject, injectable } from 'tsyringe';
 import { AppError, type LogContext } from '@map-colonies/3d-shared';
 import { SERVICES } from '@common/constants';
@@ -39,19 +39,20 @@ export class MetadataExtractor {
   }
 
   private async readFirstFeature(files: ShapefileFiles): Promise<Feature> {
-    const logContext = { ...this.logContext, function: this.readFirstFeature.name };
-    let source: Awaited<ReturnType<typeof openShapefile>> | undefined;
+    const result = await this.readFirstRow(files);
+    if (result.done) {
+      throw new AppError('badRequest', StatusCodes.BAD_REQUEST, ERROR_METADATA_NO_FEATURES, true);
+    }
+    return result.value;
+  }
+
+  private async readFirstRow(files: ShapefileFiles): Promise<ShapefileReadResult> {
+    const logContext = { ...this.logContext, function: this.readFirstRow.name };
+    let source: IShapefileSource | undefined;
     try {
       source = await openShapefile(files.shp);
-      const { done, value } = await source.read();
-      if (done) {
-        throw new AppError('badRequest', StatusCodes.BAD_REQUEST, ERROR_METADATA_NO_FEATURES, true);
-      }
-      return value;
+      return await source.read();
     } catch (err) {
-      if (err instanceof AppError) {
-        throw err;
-      }
       this.logger.error({ msg: 'failed to read shapefile', logContext, err, shapefile: files.shp });
       throw new AppError('badRequest', StatusCodes.BAD_REQUEST, `${basename(files.shp)}: shapefile is corrupted or unreadable`, true);
     } finally {

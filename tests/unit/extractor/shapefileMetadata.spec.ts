@@ -44,6 +44,12 @@ describe('extractCommonMetadata', function () {
     });
   });
 
+  it('should trim the text attributes it maps', function () {
+    const result = extractCommonMetadata(feature(row({ prodID: ' AFL ', prodName: 'afula  ' })));
+
+    expect(result).toMatchObject({ success: true, data: { productId: 'AFL', productName: 'afula' } });
+  });
+
   it('should accept an ISO date string and a numeric srsId', function () {
     const result = extractCommonMetadata(feature(row({ prodDate: '2025-07-10T00:00:00.000Z', srsId: 4326 })));
 

@@ -2,10 +2,13 @@ import { cp, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { jsLogger } from '@map-colonies/js-logger';
+import * as gdal from 'gdal-async';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { AppError } from '@map-colonies/3d-shared';
 import { MetadataExtractor } from '@src/extractor/metadataExtractor';
+import { ERROR_METADATA_NO_FEATURES } from '@src/extractor/constants';
 import type { IngestionFiles, ShapefileFiles } from '@src/validator/interfaces';
+import { createShapefile } from '@tests/helpers/shapefile';
 
 const FIXTURE = join(__dirname, '../../fixtures/ingestion/afula');
 
@@ -62,6 +65,22 @@ describe('MetadataExtractor', function () {
       await expect(promise).rejects.toThrow(AppError);
       await expect(promise).rejects.toThrow('ShapeMetadata.shp: shapefile is corrupted or unreadable');
     });
+  });
+
+  it('should throw a 400 AppError when the metadata shapefile has no rows', async function () {
+    const folder = await mkdtemp(join(tmpdir(), 'ops-trigger-empty-'));
+    try {
+      const empty = join(folder, 'ShapeMetadata.shp');
+      createShapefile(empty, gdal.wkbPolygon, []);
+      const files = filesOf(FIXTURE);
+
+      const promise = extractor.extract({ ...files, metadata: { ...files.metadata, shp: empty } });
+
+      await expect(promise).rejects.toThrow(AppError);
+      await expect(promise).rejects.toThrow(ERROR_METADATA_NO_FEATURES);
+    } finally {
+      await rm(folder, { recursive: true, force: true });
+    }
   });
 
   it('should throw a 400 AppError when the first row misses the common attributes', async function () {

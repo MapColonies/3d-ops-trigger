@@ -1,31 +1,10 @@
 import type { Feature } from 'geojson';
 import { SHAPE_METADATA_FIELDS } from './constants';
-import type { ExtractionResult, GdalDate } from './interfaces';
+import type { ExtractionResult } from './interfaces';
+import { isEmpty, toUtcDate } from './utils';
 
 const SHAPE_FIELDS = SHAPE_METADATA_FIELDS;
 const MANDATORY_FIELDS = Object.values(SHAPE_FIELDS);
-
-const isEmpty = (value: unknown): boolean => value === undefined || value === null || (typeof value === 'string' && value.trim() === '');
-
-const isGdalDate = (value: unknown): value is GdalDate =>
-  typeof value === 'object' &&
-  value !== null &&
-  'year' in value &&
-  'month' in value &&
-  'day' in value &&
-  [value.year, value.month, value.day].every((part) => Number.isInteger(part));
-
-const toUtcDate = (value: unknown): Date | undefined => {
-  if (isGdalDate(value)) {
-    const date = new Date(Date.UTC(value.year, value.month - 1, value.day));
-    return Number.isNaN(date.getTime()) ? undefined : date;
-  }
-  if (typeof value === 'string') {
-    const date = new Date(value);
-    return Number.isNaN(date.getTime()) ? undefined : date;
-  }
-  return undefined;
-};
 
 const extractCommonMetadata = (feature: Feature): ExtractionResult => {
   const properties = feature.properties ?? {};
@@ -43,13 +22,13 @@ const extractCommonMetadata = (feature: Feature): ExtractionResult => {
   return {
     success: true,
     data: {
-      productId: String(properties[SHAPE_FIELDS.prodID]),
-      productName: String(properties[SHAPE_FIELDS.prodName]),
-      srsId: String(properties[SHAPE_FIELDS.srsId]),
-      srsName: String(properties[SHAPE_FIELDS.srsName]),
-      producerName: String(properties[SHAPE_FIELDS.producer]),
-      productionSystem: String(properties[SHAPE_FIELDS.prodSys]),
-      productionSystemVersion: String(properties[SHAPE_FIELDS.prodVer]),
+      productId: String(properties[SHAPE_FIELDS.prodID]).trim(),
+      productName: String(properties[SHAPE_FIELDS.prodName]).trim(),
+      srsId: String(properties[SHAPE_FIELDS.srsId]).trim(),
+      srsName: String(properties[SHAPE_FIELDS.srsName]).trim(),
+      producerName: String(properties[SHAPE_FIELDS.producer]).trim(),
+      productionSystem: String(properties[SHAPE_FIELDS.prodSys]).trim(),
+      productionSystemVersion: String(properties[SHAPE_FIELDS.prodVer]).trim(),
       productionDate: productionDate.toISOString(),
     },
   };
