@@ -30,7 +30,7 @@ describe('MetadataExtractor', function () {
     extractor = new MetadataExtractor(await jsLogger({ enabled: false }));
   });
 
-  it('should extract the common metadata from the first row of the fixture shapefile', async function () {
+  it('should extract the metadata from the first row of the fixture shapefile', async function () {
     const metadata = await extractor.extract(filesOf(FIXTURE));
 
     expect(metadata).toEqual({
@@ -42,6 +42,19 @@ describe('MetadataExtractor', function () {
       productionSystem: 'sys',
       productionSystemVersion: '1',
       productionDate: '2025-07-10T00:00:00.000Z',
+      imagingTimeBeginUTC: new Date('2025-07-06T00:00:00.000Z'),
+      imagingTimeEndUTC: new Date('2025-07-08T00:00:00.000Z'),
+      minResolutionMeter: 0.5,
+      maxResolutionMeter: 1,
+      maxAbsoluteAccuracyCEP90: 2.5,
+      maxAbsoluteAccuracyLEP90: 3,
+      maxRelativeAccuracyCEP90: 1,
+      maxRelativeAccuracyLEP90: 1.5,
+      sensors: ['OTHER'],
+      partId: 1,
+      productType: '3DPhotoRealistic',
+      classification: '4',
+      countries: ['ישראל'],
     });
   });
 
@@ -83,7 +96,7 @@ describe('MetadataExtractor', function () {
     }
   });
 
-  it('should throw a 400 AppError when the first row misses the common attributes', async function () {
+  it('should throw a 400 AppError when the first row misses the mandatory attributes', async function () {
     const files = filesOf(FIXTURE);
     const promise = extractor.extract({ ...files, metadata: files.product });
 

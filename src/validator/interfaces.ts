@@ -1,4 +1,4 @@
-import type { ExtractedMetadata } from '../extractor/interfaces';
+import type { ShapeMetadataRow } from '@map-colonies/3d-shared';
 
 export interface ShapefileFiles {
   shp: string;
@@ -14,4 +14,4 @@ export interface IngestionFiles {
   metadata: ShapefileFiles;
 }
 
-export type ProductIdentity = Pick<ExtractedMetadata, 'productId' | 'productName'>;
+export type ProductIdentity = Pick<ShapeMetadataRow, 'productId' | 'productName'>;

@@ -4,12 +4,10 @@ import type { Logger } from '@map-colonies/js-logger';
 import { StatusCodes } from 'http-status-codes';
 import { openShapefile, type IShapefileSource, type ShapefileReadResult } from '@map-colonies/shapefile-reader';
 import { inject, injectable } from 'tsyringe';
-import { AppError, type LogContext } from '@map-colonies/3d-shared';
+import { AppError, extractShapeMetadataRow, type LogContext, type ShapeMetadataRow } from '@map-colonies/3d-shared';
 import { SERVICES } from '@common/constants';
 import type { IngestionFiles, ShapefileFiles } from '../validator/interfaces';
 import { ERROR_METADATA_NO_FEATURES } from './constants';
-import { extractCommonMetadata } from './shapefileMetadata';
-import type { ExtractedMetadata } from './interfaces';
 
 @injectable()
 export class MetadataExtractor {
@@ -22,19 +20,19 @@ export class MetadataExtractor {
     };
   }
 
-  public async extract(files: IngestionFiles): Promise<ExtractedMetadata> {
+  public async extract(files: IngestionFiles): Promise<ShapeMetadataRow> {
     const logContext = { ...this.logContext, function: this.extract.name };
-    this.logger.info({ msg: 'extracting common metadata from the first shapefile row', logContext, shapefile: files.metadata.shp });
+    this.logger.info({ msg: 'extracting the metadata from the first shapefile row', logContext, shapefile: files.metadata.shp });
 
     const firstFeature = await this.readFirstFeature(files.metadata);
 
-    const result = extractCommonMetadata(firstFeature);
+    const result = extractShapeMetadataRow(firstFeature.properties ?? {});
     if (!result.success) {
       this.logger.warn({ msg: 'shapefile metadata is invalid', logContext, errors: result.errors });
       throw new AppError('badRequest', StatusCodes.BAD_REQUEST, result.errors.join('; '), true);
     }
 
-    this.logger.info({ msg: 'extracted common metadata from the shapefile', logContext });
+    this.logger.info({ msg: 'extracted the metadata from the shapefile', logContext });
     return result.data;
   }
 
