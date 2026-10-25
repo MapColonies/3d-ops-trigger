@@ -1,7 +1,7 @@
 import type { Logger } from '@map-colonies/js-logger';
 import { StatusCodes } from 'http-status-codes';
 import { inject, injectable } from 'tsyringe';
-import { new3DLayerMetadataSchema, AppError, type LogContext } from '@map-colonies/3d-shared';
+import { ingestion3DPayloadSchema, AppError, type LogContext } from '@map-colonies/3d-shared';
 import type { ZodError } from 'zod';
 import { SERVICES } from '@common/constants';
 import { LookupTablesClient } from '../externalServices/lookupTables/lookupTablesClient';
@@ -30,7 +30,7 @@ export class ValidationManager {
     const logContext = { ...this.logContext, function: this.validateIngestion.name };
     this.logger.info({ msg: 'ingestion validation start', logContext });
 
-    const parsed = new3DLayerMetadataSchema.safeParse(formFields);
+    const parsed = ingestion3DPayloadSchema.safeParse(formFields);
     if (!parsed.success) {
       const message = this.formatIssues(parsed.error);
       this.logger.error({ msg: 'metadata schema validation failed', logContext, issues: message });

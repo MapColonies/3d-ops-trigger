@@ -52,9 +52,7 @@ describe('MetadataExtractor', function () {
       maxRelativeAccuracyLEP90: 1.5,
       sensors: ['OTHER'],
       partId: 1,
-      productType: '3DPhotoRealistic',
-      classification: '4',
-      countries: ['ישראל'],
+      countries: ['France'],
     });
   });
 

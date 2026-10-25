@@ -10,7 +10,7 @@ import { buildValidFormFields as validForm, buildProductIdentity } from '@tests/
 
 const lookupStub = {
   getClassifications: vi.fn().mockResolvedValue(['abc123']),
-  getCountries: vi.fn().mockResolvedValue(['ישראל', 'USA']),
+  getCountries: vi.fn().mockResolvedValue(['France', 'USA']),
 } as unknown as LookupTablesClient;
 
 const product = buildProductIdentity();
@@ -58,7 +58,7 @@ describe('ValidationManager', function () {
   });
 
   it('should throw 400 listing the regions that are not in the countries lookup table', async function () {
-    const metadata = { ...validForm(), region: ['ישראל', 'Atlantis', 'Mordor'] };
+    const metadata = { ...validForm(), region: ['France', 'Atlantis', 'Mordor'] };
 
     await expect(validator.validateIngestion(metadata, product)).rejects.toThrow('region contains invalid values: Atlantis,Mordor');
   });
