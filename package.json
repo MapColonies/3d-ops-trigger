@@ -35,7 +35,7 @@
   },
   "dependencies": {
     "@godaddy/terminus": "^4.12.1",
-    "@map-colonies/3d-shared": "file:../../3d-general/3d-shared",
+    "@map-colonies/3d-shared": "^1.0.0",
     "@map-colonies/config": "^4.0.1",
     "@map-colonies/error-express-handler": "^4.0.0",
     "@map-colonies/express-access-log-middleware": "^5.0.0",
