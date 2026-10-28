@@ -26,11 +26,11 @@ export class ValidationManager {
     };
   }
 
-  public async validateIngestion(formFields: Record<string, unknown>, product: ProductIdentity): Promise<void> {
+  public async validateIngestion(payload: Record<string, unknown>, product: ProductIdentity): Promise<void> {
     const logContext = { ...this.logContext, function: this.validateIngestion.name };
     this.logger.info({ msg: 'ingestion validation start', logContext });
 
-    const parsed = ingestion3DPayloadSchema.safeParse(formFields);
+    const parsed = ingestion3DPayloadSchema.safeParse(payload);
     if (!parsed.success) {
       const message = this.formatIssues(parsed.error);
       this.logger.error({ msg: 'metadata schema validation failed', logContext, issues: message });

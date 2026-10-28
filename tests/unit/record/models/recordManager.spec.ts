@@ -10,7 +10,7 @@ describe('RecordManager', function () {
   let manager: RecordManager;
   let validator: { validateIngestion: ReturnType<typeof vi.fn> };
   let filesValidator: { validateIngestionFiles: ReturnType<typeof vi.fn> };
-  let extractor: { extract: ReturnType<typeof vi.fn> };
+  let metadataExtractor: { extract: ReturnType<typeof vi.fn> };
   let productReader: { read: ReturnType<typeof vi.fn> };
 
   const files = { modelPath: '/models/afula/data/tileset.json', product: { shp: '/models/afula/shape/Product.shp' }, metadata: {} };
@@ -19,13 +19,13 @@ describe('RecordManager', function () {
   beforeEach(async function () {
     validator = { validateIngestion: vi.fn().mockResolvedValue(undefined) };
     filesValidator = { validateIngestionFiles: vi.fn().mockResolvedValue(files) };
-    extractor = { extract: vi.fn().mockResolvedValue(extracted) };
+    metadataExtractor = { extract: vi.fn().mockResolvedValue(extracted) };
     productReader = { read: vi.fn().mockResolvedValue({ type: 'Polygon', coordinates: [] }) };
     manager = new RecordManager(
       await jsLogger({ enabled: false }),
       validator as unknown as ValidationManager,
       filesValidator as unknown as FilesValidator,
-      extractor as unknown as MetadataExtractor,
+      metadataExtractor as unknown as MetadataExtractor,
       productReader as unknown as ProductReader
     );
   });
@@ -45,17 +45,10 @@ describe('RecordManager', function () {
 
       expect(result.jobId).toBeTypeOf('string');
       expect(result.status).toBeTypeOf('string');
-      expect(filesValidator.validateIngestionFiles).toHaveBeenCalledWith({
-        modelPath: payload.modelPath,
-        productShapefilePath: payload.productShapefilePath,
-        metadataShapefilePath: payload.metadataShapefilePath,
-      });
+      expect(filesValidator.validateIngestionFiles).toHaveBeenCalledWith(payload);
       expect(productReader.read).toHaveBeenCalledWith(files.product.shp);
-      expect(extractor.extract).toHaveBeenCalledWith(files);
-      expect(validator.validateIngestion).toHaveBeenCalledWith(
-        { productType: '3DPhotoRealistic', classification: '4', region: ['israel'] },
-        extracted
-      );
+      expect(metadataExtractor.extract).toHaveBeenCalledWith(files);
+      expect(validator.validateIngestion).toHaveBeenCalledWith(payload, extracted);
     });
 
     it('should reject when the product shapefile is invalid', async function () {
@@ -75,7 +68,7 @@ describe('RecordManager', function () {
     });
 
     it('should reject when the metadata shapefile is invalid', async function () {
-      extractor.extract.mockRejectedValue(new Error('invalid metadata'));
+      metadataExtractor.extract.mockRejectedValue(new Error('invalid metadata'));
 
       await expect(
         manager.createIngestion({
@@ -104,7 +97,7 @@ describe('RecordManager', function () {
         })
       ).rejects.toThrow('missing files');
       expect(productReader.read).not.toHaveBeenCalled();
-      expect(extractor.extract).not.toHaveBeenCalled();
+      expect(metadataExtractor.extract).not.toHaveBeenCalled();
     });
   });
 

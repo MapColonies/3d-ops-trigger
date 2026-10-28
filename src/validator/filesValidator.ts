@@ -3,10 +3,9 @@ import { basename, dirname, extname, join, resolve, sep } from 'node:path';
 import type { Logger } from '@map-colonies/js-logger';
 import { StatusCodes } from 'http-status-codes';
 import { inject, injectable } from 'tsyringe';
-import { AppError, type LogContext } from '@map-colonies/3d-shared';
+import { AppError, type Ingestion3DPayload, type LogContext } from '@map-colonies/3d-shared';
 import { SERVICES } from '@common/constants';
 import type { ConfigType } from '@common/config';
-import type { IngestionPayload } from '../record/models/recordManager';
 import type { IngestionFiles, ShapefileFiles } from './interfaces';
 
 const ZIP_LOCAL_FILE_HEADER_SIGNATURE = 0x04034b50;
@@ -47,9 +46,7 @@ export class FilesValidator {
     };
   }
 
-  public async validateIngestionFiles(
-    payload: Pick<IngestionPayload, 'modelPath' | 'productShapefilePath' | 'metadataShapefilePath'>
-  ): Promise<IngestionFiles> {
+  public async validateIngestionFiles(payload: Ingestion3DPayload): Promise<IngestionFiles> {
     const logContext = { ...this.logContext, function: this.validateIngestionFiles.name };
     this.logger.info({ msg: 'ingestion files validation start', logContext, modelPath: payload.modelPath });
 

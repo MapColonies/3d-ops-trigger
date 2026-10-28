@@ -34,13 +34,13 @@ export class ProductReader {
     const logContext = { ...this.logContext, function: this.read.name };
     this.logger.info({ msg: 'reading product shapefile', logContext, productShapefilePath });
 
-    const { count, first } = await this.readAndProcess(productShapefilePath);
-    if (count !== 1 || first === undefined) {
+    const { count, firstFeature } = await this.readAndProcess(productShapefilePath);
+    if (count !== 1 || firstFeature === undefined) {
       this.logger.error({ msg: ERROR_PRODUCT_SINGLE_FEATURE, logContext, productShapefilePath, features: count });
       throw new AppError('badRequest', StatusCodes.BAD_REQUEST, `Product shapefile is not valid: ${ERROR_PRODUCT_SINGLE_FEATURE}`, true);
     }
 
-    const geometry = geometrySchema.safeParse(first.geometry);
+    const geometry = geometrySchema.safeParse(firstFeature.geometry);
     if (!geometry.success) {
       this.logger.error({ msg: ERROR_PRODUCT_GEOMETRY, logContext, productShapefilePath, issues: geometry.error.issues });
       throw new AppError('badRequest', StatusCodes.BAD_REQUEST, `Product shapefile is not valid: ${ERROR_PRODUCT_GEOMETRY}`, true);
@@ -49,14 +49,14 @@ export class ProductReader {
     return geometry.data;
   }
 
-  private async readAndProcess(productShapefilePath: string): Promise<{ count: number; first: Feature | undefined }> {
+  private async readAndProcess(productShapefilePath: string): Promise<{ count: number; firstFeature: Feature | undefined }> {
     const logContext = { ...this.logContext, function: this.readAndProcess.name };
     let count = 0;
-    let first: Feature | undefined;
+    let firstFeature: Feature | undefined;
     const processor: ChunkProcessor = {
       process: async (chunk: ShapefileChunk): Promise<void> => {
         count += chunk.features.length + chunk.skippedFeatures.length;
-        first ??= chunk.features[0] ?? chunk.skippedFeatures[0];
+        firstFeature ??= chunk.features[0] ?? chunk.skippedFeatures[0];
         await Promise.resolve();
       },
     };
@@ -67,7 +67,7 @@ export class ProductReader {
       this.logger.error({ msg: 'failed to read product shapefile', logContext, err, productShapefilePath });
       throw this.toReadError(err, productShapefilePath);
     }
-    return { count, first };
+    return { count, firstFeature };
   }
 
   private toReadError(err: unknown, productShapefilePath: string): AppError {

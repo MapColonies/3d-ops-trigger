@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { jsLogger } from '@map-colonies/js-logger';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { AppError } from '@map-colonies/3d-shared';
+import { AppError, type Ingestion3DPayload } from '@map-colonies/3d-shared';
 import type { ConfigType } from '@common/config';
 import {
   FilesValidator,
@@ -29,10 +29,13 @@ const OGC_WGS84_PRJ =
 const SHARE_BASE_PATH = '\\\\domtest\\models';
 const share = (relativePath: string): string => `${SHARE_BASE_PATH}\\${relativePath.replaceAll('/', '\\')}`;
 
-const validPaths = {
+const validPayload: Ingestion3DPayload = {
   modelPath: share('afula/data/tileset.json'),
   productShapefilePath: share('afula/shape/Product.shp'),
   metadataShapefilePath: share('afula/shape/ShapeMetadata.shp'),
+  productType: '3DPhotoRealistic',
+  classification: 'abc123',
+  region: ['France'],
 };
 
 describe('FilesValidator', function () {
@@ -52,7 +55,7 @@ describe('FilesValidator', function () {
   });
 
   it('should resolve all files for a valid tileset.json ingestion', async function () {
-    const files = await validator.validateIngestionFiles(validPaths);
+    const files = await validator.validateIngestionFiles(validPayload);
 
     expect(files.modelPath).toBe(join(pvPath, 'afula/data/tileset.json'));
     expect(files.product).toEqual({
@@ -67,6 +70,7 @@ describe('FilesValidator', function () {
 
   it('should accept share paths written with forward slashes', async function () {
     const files = await validator.validateIngestionFiles({
+      ...validPayload,
       modelPath: '//domtest/models/afula/data/tileset.json',
       productShapefilePath: '//domtest/models/afula/shape/Product.shp',
       metadataShapefilePath: '//domtest/models/afula/shape/ShapeMetadata.shp',
@@ -76,26 +80,26 @@ describe('FilesValidator', function () {
   });
 
   it('should reject a path that is not under the base path', async function () {
-    await expect(validator.validateIngestionFiles({ ...validPaths, modelPath: '\\\\other\\share\\afula\\data\\tileset.json' })).rejects.toThrow(
+    await expect(validator.validateIngestionFiles({ ...validPayload, modelPath: '\\\\other\\share\\afula\\data\\tileset.json' })).rejects.toThrow(
       `modelPath: ${ERROR_PATH_OUTSIDE_BASE}`
     );
   });
 
   it('should accept a valid .3tz model', async function () {
-    await expect(validator.validateIngestionFiles({ ...validPaths, modelPath: share('afula/data/model.3tz') })).resolves.toBeDefined();
+    await expect(validator.validateIngestionFiles({ ...validPayload, modelPath: share('afula/data/model.3tz') })).resolves.toBeDefined();
   });
 
   it('should accept a tileset nested deeper inside the data folder', async function () {
     await cp(join(pvPath, 'afula/data/tileset.json'), join(pvPath, 'afula/data/tiles/tileset.json'), { recursive: true });
 
-    await expect(validator.validateIngestionFiles({ ...validPaths, modelPath: share('afula/data/tiles/tileset.json') })).resolves.toBeDefined();
+    await expect(validator.validateIngestionFiles({ ...validPayload, modelPath: share('afula/data/tiles/tileset.json') })).resolves.toBeDefined();
   });
 
   it.each([
     ['modelPath', { modelPath: share('../afula/data/tileset.json') }],
     ['productShapefilePath', { productShapefilePath: share('../../etc/Product.shp') }],
   ])('should reject a %s that escapes the base path', async function (field, override) {
-    await expect(validator.validateIngestionFiles({ ...validPaths, ...override })).rejects.toThrow(`${field}: ${ERROR_PATH_OUTSIDE_BASE}`);
+    await expect(validator.validateIngestionFiles({ ...validPayload, ...override })).rejects.toThrow(`${field}: ${ERROR_PATH_OUTSIDE_BASE}`);
   });
 
   it.each([
@@ -105,14 +109,14 @@ describe('FilesValidator', function () {
     [ERROR_SHAPEFILE_NOT_IN_SHAPE, { metadataShapefilePath: share('afula/data/ShapeMetadata.shp') }],
     [ERROR_SHAPEFILES_DIFFERENT_FOLDERS, { metadataShapefilePath: share('other/shape/ShapeMetadata.shp') }],
   ])('should reject an invalid layout: %s', async function (message, override) {
-    await expect(validator.validateIngestionFiles({ ...validPaths, ...override })).rejects.toThrow(message);
+    await expect(validator.validateIngestionFiles({ ...validPayload, ...override })).rejects.toThrow(message);
   });
 
   it('should list every missing file, including shapefile sidecars', async function () {
     await rm(join(pvPath, 'afula/shape/Product.cpg'));
     await rm(join(pvPath, 'afula/shape/ShapeMetadata.shx'));
 
-    const promise = validator.validateIngestionFiles({ ...validPaths, modelPath: share('afula/data/missing.json') });
+    const promise = validator.validateIngestionFiles({ ...validPayload, modelPath: share('afula/data/missing.json') });
 
     await expect(promise).rejects.toThrow(AppError);
     await expect(promise).rejects.toThrow('missing files: afula/data/missing.json, afula/shape/Product.cpg, afula/shape/ShapeMetadata.shx');
@@ -121,19 +125,19 @@ describe('FilesValidator', function () {
   it('should reject a projected (non WGS84 geographic) .prj', async function () {
     await writeFile(join(pvPath, 'afula/shape/ShapeMetadata.prj'), UTM_PRJ);
 
-    await expect(validator.validateIngestionFiles(validPaths)).rejects.toThrow(`ShapeMetadata.prj: ${ERROR_PRJ_NOT_WGS84}`);
+    await expect(validator.validateIngestionFiles(validPayload)).rejects.toThrow(`ShapeMetadata.prj: ${ERROR_PRJ_NOT_WGS84}`);
   });
 
   it('should reject a geographic .prj on a non WGS84 datum even when it has a TOWGS84 clause', async function () {
     await writeFile(join(pvPath, 'afula/shape/Product.prj'), ISRAEL_DATUM_PRJ);
 
-    await expect(validator.validateIngestionFiles(validPaths)).rejects.toThrow(`Product.prj: ${ERROR_PRJ_NOT_WGS84}`);
+    await expect(validator.validateIngestionFiles(validPayload)).rejects.toThrow(`Product.prj: ${ERROR_PRJ_NOT_WGS84}`);
   });
 
   it('should accept an OGC style WGS84 .prj', async function () {
     await writeFile(join(pvPath, 'afula/shape/Product.prj'), OGC_WGS84_PRJ);
 
-    await expect(validator.validateIngestionFiles(validPaths)).resolves.toBeDefined();
+    await expect(validator.validateIngestionFiles(validPayload)).resolves.toBeDefined();
   });
 
   it('should resolve upper case shapefile extensions with matching sidecars', async function () {
@@ -144,7 +148,7 @@ describe('FilesValidator', function () {
     }
 
     const files = await validator.validateIngestionFiles({
-      ...validPaths,
+      ...validPayload,
       productShapefilePath: share('afula/shape/Product.SHP'),
       metadataShapefilePath: share('afula/shape/ShapeMetadata.SHP'),
     });
@@ -158,7 +162,7 @@ describe('FilesValidator', function () {
     await chmod(shapeFolder, 0o000);
 
     try {
-      await expect(validator.validateIngestionFiles(validPaths)).rejects.toMatchObject({ code: 'EACCES' });
+      await expect(validator.validateIngestionFiles(validPayload)).rejects.toMatchObject({ code: 'EACCES' });
     } finally {
       await chmod(shapeFolder, 0o755);
     }
@@ -167,7 +171,7 @@ describe('FilesValidator', function () {
   it('should reject a non UTF-8 .cpg', async function () {
     await writeFile(join(pvPath, 'afula/shape/Product.cpg'), 'ISO-8859-8');
 
-    await expect(validator.validateIngestionFiles(validPaths)).rejects.toThrow(`Product.cpg: ${ERROR_CPG_NOT_UTF8}`);
+    await expect(validator.validateIngestionFiles(validPayload)).rejects.toThrow(`Product.cpg: ${ERROR_CPG_NOT_UTF8}`);
   });
 
   it.each([
@@ -176,12 +180,12 @@ describe('FilesValidator', function () {
   ])('should reject an invalid tileset json (%s)', async function (_case, content) {
     await writeFile(join(pvPath, 'afula/data/tileset.json'), content);
 
-    await expect(validator.validateIngestionFiles(validPaths)).rejects.toThrow(ERROR_TILESET_INVALID);
+    await expect(validator.validateIngestionFiles(validPayload)).rejects.toThrow(ERROR_TILESET_INVALID);
   });
 
   it('should reject a .3tz that is not a zip archive', async function () {
     await writeFile(join(pvPath, 'afula/data/model.3tz'), 'definitely not a zip');
 
-    await expect(validator.validateIngestionFiles({ ...validPaths, modelPath: share('afula/data/model.3tz') })).rejects.toThrow(ERROR_3TZ_INVALID);
+    await expect(validator.validateIngestionFiles({ ...validPayload, modelPath: share('afula/data/model.3tz') })).rejects.toThrow(ERROR_3TZ_INVALID);
   });
 });

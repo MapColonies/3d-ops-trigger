@@ -22,7 +22,7 @@ export class RecordManager {
     @inject(SERVICES.LOGGER) private readonly logger: Logger,
     @inject(ValidationManager) private readonly validator: ValidationManager,
     @inject(FilesValidator) private readonly filesValidator: FilesValidator,
-    @inject(MetadataExtractor) private readonly extractor: MetadataExtractor,
+    @inject(MetadataExtractor) private readonly metadataExtractor: MetadataExtractor,
     @inject(ProductReader) private readonly productReader: ProductReader
   ) {
     this.logContext = {
@@ -34,11 +34,9 @@ export class RecordManager {
   public async createIngestion(payload: IngestionPayload): Promise<JobResponse> {
     const logContext = { ...this.logContext, function: this.createIngestion.name };
     this.logger.info({ msg: 'creating ingestion job', logContext, modelPath: payload.modelPath });
-    const { modelPath, productShapefilePath, metadataShapefilePath, ...formFields } = payload;
-
-    const files = await this.filesValidator.validateIngestionFiles({ modelPath, productShapefilePath, metadataShapefilePath });
-    const [, metadata] = await Promise.all([this.productReader.read(files.product.shp), this.extractor.extract(files)]);
-    await this.validator.validateIngestion(formFields, metadata);
+    const files = await this.filesValidator.validateIngestionFiles(payload);
+    const [, metadata] = await Promise.all([this.productReader.read(files.product.shp), this.metadataExtractor.extract(files)]);
+    await this.validator.validateIngestion(payload, metadata);
     return { jobId: 'stub-ingestion-job-id', status: 'PENDING' };
   }
 
