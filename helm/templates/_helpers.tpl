@@ -1,7 +1,7 @@
 {{/*
 Expand the name of the chart.
 */}}
-{{- define "ts-server-boilerplate.name" -}}
+{{- define "3d-ops-trigger.name" -}}
 {{- default .Chart.Name .Values.nameOverride | trunc 63 | trimSuffix "-" -}}
 {{- end -}}
 
@@ -10,7 +10,7 @@ Create a default fully qualified app name.
 We truncate at 63 chars because some Kubernetes name fields are limited to this (by the DNS naming spec).
 If release name contains chart name it will be used as a full name.
 */}}
-{{- define "ts-server-boilerplate.fullname" -}}
+{{- define "3d-ops-trigger.fullname" -}}
 {{- if .Values.fullnameOverride -}}
 {{- .Values.fullnameOverride | trunc 63 | trimSuffix "-" -}}
 {{- else -}}
@@ -26,16 +26,16 @@ If release name contains chart name it will be used as a full name.
 {{/*
 Create chart name and version as used by the chart label.
 */}}
-{{- define "ts-server-boilerplate.chart" -}}
+{{- define "3d-ops-trigger.chart" -}}
 {{- printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
 {{/*
 Common labels
 */}}
-{{- define "ts-server-boilerplate.labels" -}}
-helm.sh/chart: {{ include "ts-server-boilerplate.chart" . }}
-{{ include "ts-server-boilerplate.selectorLabels" . }}
+{{- define "3d-ops-trigger.labels" -}}
+helm.sh/chart: {{ include "3d-ops-trigger.chart" . }}
+{{ include "3d-ops-trigger.selectorLabels" . }}
 {{- if .Chart.AppVersion }}
 app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
 {{- end }}
@@ -46,15 +46,15 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{/*
 Returns the tag of the chart.
 */}}
-{{- define "ts-server-boilerplate.tag" -}}
+{{- define "3d-ops-trigger.tag" -}}
 {{- default (printf "v%s" .Chart.AppVersion) .Values.image.tag }}
 {{- end }}
 
 {{/*
 Selector labels
 */}}
-{{- define "ts-server-boilerplate.selectorLabels" -}}
-app.kubernetes.io/name: {{ include "ts-server-boilerplate.name" . }}
+{{- define "3d-ops-trigger.selectorLabels" -}}
+app.kubernetes.io/name: {{ include "3d-ops-trigger.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{ include "mclabels.selectorLabels" . }}
 {{- end }}
@@ -62,7 +62,7 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{/*
 Returns the cloud provider name from global if exists or from the chart's values, defaults to minikube
 */}}
-{{- define "ts-server-boilerplate.cloudProviderFlavor" -}}
+{{- define "3d-ops-trigger.cloudProviderFlavor" -}}
 {{- if .Values.global.cloudProvider.flavor }}
     {{- .Values.global.cloudProvider.flavor -}}
 {{- else if .Values.cloudProvider -}}
@@ -75,7 +75,7 @@ Returns the cloud provider name from global if exists or from the chart's values
 {{/*
 Returns the cloud provider docker registry url from global if exists or from the chart's values
 */}}
-{{- define "ts-server-boilerplate.cloudProviderDockerRegistryUrl" -}}
+{{- define "3d-ops-trigger.cloudProviderDockerRegistryUrl" -}}
 {{- if .Values.global.cloudProvider.dockerRegistryUrl }}
     {{- printf "%s/" .Values.global.cloudProvider.dockerRegistryUrl -}}
 {{- else if .Values.cloudProvider.dockerRegistryUrl -}}
@@ -87,7 +87,7 @@ Returns the cloud provider docker registry url from global if exists or from the
 {{/*
 Returns the cloud provider image pull secret name from global if exists or from the chart's values
 */}}
-{{- define "ts-server-boilerplate.cloudProviderImagePullSecretName" -}}
+{{- define "3d-ops-trigger.cloudProviderImagePullSecretName" -}}
 {{- if .Values.global.cloudProvider.imagePullSecretName }}
     {{- .Values.global.cloudProvider.imagePullSecretName -}}
 {{- else if .Values.cloudProvider.imagePullSecretName -}}
@@ -98,7 +98,7 @@ Returns the cloud provider image pull secret name from global if exists or from 
 {{/*
 Returns the tracing url from global if set, otherwise from the chart's values
 */}}
-{{- define "ts-server-boilerplate.tracingUrl" -}}
+{{- define "3d-ops-trigger.tracingUrl" -}}
 {{- if .Values.global.telemetry.tracing.url }}
     {{- .Values.global.telemetry.tracing.url -}}
 {{- else if .Values.telemetry.tracing.url -}}
@@ -109,7 +109,7 @@ Returns the tracing url from global if set, otherwise from the chart's values
 {{/*
 Returns the opentelemetry logging url from global if set, otherwise from the chart's values
 */}}
-{{- define "ts-server-boilerplate.opentelemetryLoggingUrl" -}}
+{{- define "3d-ops-trigger.opentelemetryLoggingUrl" -}}
 {{- if .Values.global.telemetry.logger.opentelemetryOptions.url }}
     {{- .Values.global.telemetry.logger.opentelemetryOptions.url -}}
 {{- else if .Values.telemetry.logger.opentelemetryOptions.url -}}
@@ -119,9 +119,9 @@ Returns the opentelemetry logging url from global if set, otherwise from the cha
 
 {{/*
 Renders a map of resource attributes as key=value,key=value for OTEL_RESOURCE_ATTRIBUTES.
-Usage: {{ include "ts-server-boilerplate.otelResourceAttributes" .resourceAttributes }}
+Usage: {{ include "3d-ops-trigger.otelResourceAttributes" .resourceAttributes }}
 */}}
-{{- define "ts-server-boilerplate.otelResourceAttributes" -}}
+{{- define "3d-ops-trigger.otelResourceAttributes" -}}
 {{- $attributes := list }}
 {{- range $key, $value := . }}
 {{- $attributes = append $attributes (printf "%s=%s" $key (toString $value)) }}
@@ -129,3 +129,9 @@ Usage: {{ include "ts-server-boilerplate.otelResourceAttributes" .resourceAttrib
 {{- join "," $attributes }}
 {{- end -}}
 
+{{/*
+Returns the NFS values, chart values first and global values for anything left empty
+*/}}
+{{- define "3d-ops-trigger.NFS" -}}
+{{- toYaml (merge (deepCopy (.Values.NFS | default dict)) (.Values.global.NFS | default dict)) -}}
+{{- end -}}

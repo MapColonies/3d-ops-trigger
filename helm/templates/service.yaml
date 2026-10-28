@@ -1,17 +1,17 @@
 {{- $releaseName := .Release.Name -}}
-{{- $chartName := include "ts-server-boilerplate.name" . -}}
-{{- $cloudProviderFlavor := include "ts-server-boilerplate.cloudProviderFlavor" . -}}
+{{- $chartName := include "3d-ops-trigger.name" . -}}
+{{- $cloudProviderFlavor := include "3d-ops-trigger.cloudProviderFlavor" . -}}
 {{- $server := .Values.server -}}
 {{- if .Values.enabled -}}
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "ts-server-boilerplate.fullname" . }}
+  name: {{ include "3d-ops-trigger.fullname" . }}
   labels:
     app: {{ $chartName }}
     component: {{ $chartName }}
     release: {{ $releaseName }}
-    {{- include "ts-server-boilerplate.labels" . | nindent 4 }}
+    {{- include "3d-ops-trigger.labels" . | nindent 4 }}
 spec:
   {{- if eq $cloudProviderFlavor "minikube" }}
   type: NodePort
@@ -27,6 +27,6 @@ spec:
   selector:
     app: {{ $chartName }}
     release: {{ $releaseName }}
-    run: {{ include "ts-server-boilerplate.fullname" . }}
-    {{- include "ts-server-boilerplate.selectorLabels" . | nindent 4 }}
+    run: {{ include "3d-ops-trigger.fullname" . }}
+    {{- include "3d-ops-trigger.selectorLabels" . | nindent 4 }}
 {{- end }}
