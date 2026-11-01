@@ -1,18 +1,4 @@
-/**
- * Reads a single file out of a .3tz (3D Tiles Archive) without unpacking the whole zip.
- *
- * Follows the 3D Tiles Archive spec (https://github.com/erikdahlstrom/3tz-specification),
- * like CesiumGS 3d-tiles-tools TilesetSource3tz:
- * 1. Read the end of the archive and find the last zip central-directory entry.
- *    By the spec it must be the uncompressed index file "@3dtilesIndex1@".
- * 2. The index is a list of 24-byte entries (md5 of the file path + 64-bit offset),
- *    sorted by the md5. Binary-search the md5 of the requested file name.
- * 3. Jump to the found offset, read the zip local file header and verify the name
- *    (two names can share an md5).
- * 4. Return the entry data, decompressed by its method: stored, deflate or zstd.
- *
- * Every failure is thrown as an Archive3tzError with a user-facing message.
- */
+// Reads one file from a .3tz without unpacking it, via the @3dtilesIndex1@ index (https://github.com/erikdahlstrom/3tz-specification)
 import { createHash } from 'node:crypto';
 import { open, type FileHandle } from 'node:fs/promises';
 import { inflateRawSync, zstdDecompressSync } from 'node:zlib';
