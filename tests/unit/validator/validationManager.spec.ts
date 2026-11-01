@@ -71,7 +71,7 @@ describe('ValidationManager', function () {
 
   it('should throw 400 when the product name already exists in the catalog', async function () {
     findRecords.mockImplementation(async (payload) =>
-      Promise.resolve(payload.productName !== undefined ? [{ id: 'existing', productName: 'afula' }] : [])
+      Promise.resolve(payload.productName !== undefined ? [{ id: 'existing', productName: 'paris' }] : [])
     );
 
     await expect(validator.validateIngestion(buildValidPayload(), product)).rejects.toThrow(ERROR_METADATA_PRODUCT_NAME_UNIQUE);
@@ -81,6 +81,6 @@ describe('ValidationManager', function () {
     await validator.validateIngestion(buildValidPayload(), product);
 
     expect(findRecords).toHaveBeenCalledWith({ productId: 'p-1' });
-    expect(findRecords).toHaveBeenCalledWith({ productName: 'afula' });
+    expect(findRecords).toHaveBeenCalledWith({ productName: 'paris' });
   });
 });

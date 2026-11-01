@@ -31,9 +31,9 @@ describe('LookupTablesClient', function () {
   });
 
   it('should return the countries values from the service', async function () {
-    mockedAxios.get.mockResolvedValue({ data: [{ value: 'ISR', translationCode: 'israel' }] });
+    mockedAxios.get.mockResolvedValue({ data: [{ value: 'FRA', translationCode: 'france' }] });
 
-    await expect(client.getCountries()).resolves.toEqual(['ISR']);
+    await expect(client.getCountries()).resolves.toEqual(['FRA']);
     expect(mockedAxios.get.mock.calls[0]?.[0]).toBe('http://lookup/lookup-tables/lookupData/countries');
   });
 

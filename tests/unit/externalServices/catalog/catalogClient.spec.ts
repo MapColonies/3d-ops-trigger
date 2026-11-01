@@ -20,29 +20,29 @@ describe('CatalogClient', function () {
   });
 
   it('should return the records found by the catalog service', async function () {
-    mockedAxios.post.mockResolvedValue({ status: StatusCodes.OK, data: [{ id: '1', productName: 'afula' }] });
+    mockedAxios.post.mockResolvedValue({ status: StatusCodes.OK, data: [{ id: '1', productName: 'paris' }] });
 
-    const records = await client.findRecords({ productName: 'afula' });
+    const records = await client.findRecords({ productName: 'paris' });
 
     expect(records).toHaveLength(1);
-    expect(records[0]?.productName).toBe('afula');
+    expect(records[0]?.productName).toBe('paris');
   });
 
   it('should throw an AppError when the catalog service fails', async function () {
     mockedAxios.post.mockRejectedValue(new Error('service down'));
 
-    await expect(client.findRecords({ productName: 'afula' })).rejects.toThrow(AppError);
+    await expect(client.findRecords({ productName: 'paris' })).rejects.toThrow(AppError);
   });
 
   it('should throw an AppError when the catalog returns an unexpected status', async function () {
     mockedAxios.post.mockResolvedValue({ status: StatusCodes.NO_CONTENT, data: [] });
 
-    await expect(client.findRecords({ productName: 'afula' })).rejects.toThrow('Problem with catalog during findRecords');
+    await expect(client.findRecords({ productName: 'paris' })).rejects.toThrow('Problem with catalog during findRecords');
   });
 
   it('should throw an AppError when the catalog returns a non-array body', async function () {
     mockedAxios.post.mockResolvedValue({ status: StatusCodes.OK, data: { id: '1' } });
 
-    await expect(client.findRecords({ productName: 'afula' })).rejects.toThrow('Problem with catalog during findRecords');
+    await expect(client.findRecords({ productName: 'paris' })).rejects.toThrow('Problem with catalog during findRecords');
   });
 });

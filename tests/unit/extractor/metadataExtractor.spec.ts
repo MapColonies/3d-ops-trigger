@@ -10,7 +10,7 @@ import { ERROR_METADATA_NO_FEATURES } from '@src/extractor/constants';
 import type { IngestionFiles, ShapefileFiles } from '@src/validator/interfaces';
 import { createShapefile } from '@tests/helpers/shapefile';
 
-const FIXTURE = join(__dirname, '../../fixtures/ingestion/afula');
+const FIXTURE = join(__dirname, '../../fixtures/ingestion/paris');
 
 const shapefile = (folder: string, name: string): ShapefileFiles => {
   const base = join(folder, 'shape', name);
@@ -34,11 +34,11 @@ describe('MetadataExtractor', function () {
     const metadata = await extractor.extract(filesOf(FIXTURE));
 
     expect(metadata).toEqual({
-      productId: 'AFL',
-      productName: 'afula',
+      productId: 'PRS',
+      productName: 'paris',
       srsId: '4326',
       srsName: 'WGS84GEO',
-      producerName: 'IDFMU',
+      producerName: 'IGNFR',
       productionSystem: 'sys',
       productionSystemVersion: '1',
       productionDate: '2025-07-10T00:00:00.000Z',

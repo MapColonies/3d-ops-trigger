@@ -13,7 +13,7 @@ describe('RecordManager', function () {
   let metadataExtractor: { extract: ReturnType<typeof vi.fn> };
   let productReader: { read: ReturnType<typeof vi.fn> };
 
-  const files = { modelPath: '/models/afula/data/tileset.json', product: { shp: '/models/afula/shape/Product.shp' }, metadata: {} };
+  const files = { modelPath: '/models/paris/data/tileset.json', product: { shp: '/models/paris/shape/Product.shp' }, metadata: {} };
   const extracted = { productId: 'p-1', srsId: '4326' };
 
   beforeEach(async function () {
@@ -33,12 +33,12 @@ describe('RecordManager', function () {
   describe('createIngestion', function () {
     it('should return a job response with a jobId and status', async function () {
       const payload: IngestionPayload = {
-        modelPath: 'afula/data/tileset.json',
-        productShapefilePath: 'afula/shape/Product.shp',
-        metadataShapefilePath: 'afula/shape/ShapeMetadata.shp',
+        modelPath: 'paris/data/tileset.json',
+        productShapefilePath: 'paris/shape/Product.shp',
+        metadataShapefilePath: 'paris/shape/ShapeMetadata.shp',
         productType: '3DPhotoRealistic',
         classification: '4',
-        region: ['israel'],
+        region: ['France'],
       };
 
       const result = await manager.createIngestion(payload);
@@ -56,12 +56,12 @@ describe('RecordManager', function () {
 
       await expect(
         manager.createIngestion({
-          modelPath: 'afula/data/tileset.json',
-          productShapefilePath: 'afula/shape/Product.shp',
-          metadataShapefilePath: 'afula/shape/ShapeMetadata.shp',
+          modelPath: 'paris/data/tileset.json',
+          productShapefilePath: 'paris/shape/Product.shp',
+          metadataShapefilePath: 'paris/shape/ShapeMetadata.shp',
           productType: '3DPhotoRealistic',
           classification: '4',
-          region: ['israel'],
+          region: ['France'],
         })
       ).rejects.toThrow('invalid product');
       expect(validator.validateIngestion).not.toHaveBeenCalled();
@@ -72,12 +72,12 @@ describe('RecordManager', function () {
 
       await expect(
         manager.createIngestion({
-          modelPath: 'afula/data/tileset.json',
-          productShapefilePath: 'afula/shape/Product.shp',
-          metadataShapefilePath: 'afula/shape/ShapeMetadata.shp',
+          modelPath: 'paris/data/tileset.json',
+          productShapefilePath: 'paris/shape/Product.shp',
+          metadataShapefilePath: 'paris/shape/ShapeMetadata.shp',
           productType: '3DPhotoRealistic',
           classification: '4',
-          region: ['israel'],
+          region: ['France'],
         })
       ).rejects.toThrow('invalid metadata');
       expect(validator.validateIngestion).not.toHaveBeenCalled();
@@ -88,12 +88,12 @@ describe('RecordManager', function () {
 
       await expect(
         manager.createIngestion({
-          modelPath: 'afula/data/tileset.json',
-          productShapefilePath: 'afula/shape/Product.shp',
-          metadataShapefilePath: 'afula/shape/ShapeMetadata.shp',
+          modelPath: 'paris/data/tileset.json',
+          productShapefilePath: 'paris/shape/Product.shp',
+          metadataShapefilePath: 'paris/shape/ShapeMetadata.shp',
           productType: '3DPhotoRealistic',
           classification: '4',
-          region: ['israel'],
+          region: ['France'],
         })
       ).rejects.toThrow('missing files');
       expect(productReader.read).not.toHaveBeenCalled();

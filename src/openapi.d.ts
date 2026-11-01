@@ -72,17 +72,17 @@ export type components = {
     ingestionPayload: {
       /**
        * @description Full share path (must start with the configured base path) to the model inside the data/ folder - a tileset.json (3D Tiles) or a .3tz file
-       * @example \\domtest\models\afula\data\tileset.json
+       * @example \\domtest\models\paris\data\tileset.json
        */
       modelPath: string;
       /**
        * @description Full share path (must start with the configured base path) to the footprint shapefile (shape/Product.shp). .shx, .dbf, .prj (WGS84) and .cpg (UTF-8) must sit next to it
-       * @example \\domtest\models\afula\shape\Product.shp
+       * @example \\domtest\models\paris\shape\Product.shp
        */
       productShapefilePath: string;
       /**
        * @description Full share path (must start with the configured base path) to the parts metadata shapefile (shape/ShapeMetadata.shp). .shx, .dbf, .prj (WGS84) and .cpg (UTF-8) must sit next to it
-       * @example \\domtest\models\afula\shape\ShapeMetadata.shp
+       * @example \\domtest\models\paris\shape\ShapeMetadata.shp
        */
       metadataShapefilePath: string;
       /** @enum {string} */

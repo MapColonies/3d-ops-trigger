@@ -10,7 +10,7 @@ import { ProductReader } from '@src/extractor/productReader';
 import { ERROR_PRODUCT_GEOMETRY, ERROR_PRODUCT_SINGLE_FEATURE } from '@src/extractor/constants';
 import { createShapefile, square } from '@tests/helpers/shapefile';
 
-const FIXTURE_SHAPE = join(__dirname, '../../fixtures/ingestion/afula/shape');
+const FIXTURE_SHAPE = join(__dirname, '../../fixtures/ingestion/paris/shape');
 
 describe('ProductReader', function () {
   let reader: ProductReader;
