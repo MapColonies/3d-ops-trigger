@@ -93,6 +93,8 @@ env:
   basePath: ''
   productReader:
     maxVerticesPerChunk: 10000
+  validation:
+    percentageLimit: 10
   catalog:
     url:
   extractable:

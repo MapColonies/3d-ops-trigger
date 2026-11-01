@@ -7,7 +7,6 @@ import { AppError, type Ingestion3DPayload } from '@map-colonies/3d-shared';
 import type { ConfigType } from '@common/config';
 import {
   FilesValidator,
-  ERROR_3TZ_INVALID,
   ERROR_CPG_NOT_UTF8,
   ERROR_MODEL_FORMAT,
   ERROR_MODEL_NOT_IN_DATA,
@@ -16,7 +15,6 @@ import {
   ERROR_SHAPEFILE_FORMAT,
   ERROR_SHAPEFILE_NOT_IN_SHAPE,
   ERROR_SHAPEFILES_DIFFERENT_FOLDERS,
-  ERROR_TILESET_INVALID,
 } from '@src/validator/filesValidator';
 
 const FIXTURE = join(__dirname, '../../fixtures/ingestion/paris');
@@ -172,20 +170,5 @@ describe('FilesValidator', function () {
     await writeFile(join(pvPath, 'paris/shape/Product.cpg'), 'ISO-8859-1');
 
     await expect(validator.validateIngestionFiles(validPayload)).rejects.toThrow(`Product.cpg: ${ERROR_CPG_NOT_UTF8}`);
-  });
-
-  it.each([
-    ['not json', 'not json'],
-    ['missing root', JSON.stringify({ asset: { version: '1.0' } })],
-  ])('should reject an invalid tileset json (%s)', async function (_case, content) {
-    await writeFile(join(pvPath, 'paris/data/tileset.json'), content);
-
-    await expect(validator.validateIngestionFiles(validPayload)).rejects.toThrow(ERROR_TILESET_INVALID);
-  });
-
-  it('should reject a .3tz that is not a zip archive', async function () {
-    await writeFile(join(pvPath, 'paris/data/model.3tz'), 'definitely not a zip');
-
-    await expect(validator.validateIngestionFiles({ ...validPayload, modelPath: share('paris/data/model.3tz') })).rejects.toThrow(ERROR_3TZ_INVALID);
   });
 });

@@ -71,7 +71,7 @@ export type components = {
     };
     ingestionPayload: {
       /**
-       * @description Full share path (must start with the configured base path) to the model inside the data/ folder - a tileset.json (3D Tiles) or a .3tz file
+       * @description Full share path (must start with the configured base path) to the model inside the data/ folder - a tileset.json (3D Tiles) or a .3tz file (3D Tiles Archive - tileset.json at its root and an @3dtilesIndex1@ index as its last entry). The model bounding volume (region or sphere) must be covered by the product footprint above the configured percentage
        * @example \\domtest\models\paris\data\tileset.json
        */
       modelPath: string;
