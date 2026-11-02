@@ -1,7 +1,6 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { bbox } from '@turf/turf';
 import { jsLogger, type Logger } from '@map-colonies/js-logger';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { TilesetTarget3tz } from '3d-tiles-tools';
@@ -51,7 +50,12 @@ describe('TilesetReader', function () {
   it.each(['tileset.json', 'model.3tz'])('should read the model polygon of the fixture %s', async function (fileName) {
     const polygon = await reader.readModelPolygon(join(FIXTURE_DATA, fileName));
 
-    bbox(polygon).forEach((value, index) => expect(value).toBeCloseTo(PARIS_BBOX[index] as number, 5));
+    const positions = polygon.coordinates.flat();
+    const longitudes = positions.map(([longitude]) => longitude as number);
+    const latitudes = positions.map(([, latitude]) => latitude as number);
+    const bbox = [Math.min(...longitudes), Math.min(...latitudes), Math.max(...longitudes), Math.max(...latitudes)];
+
+    bbox.forEach((value, index) => expect(value).toBeCloseTo(PARIS_BBOX[index] as number, 5));
   });
 
   it('should read the tileset.json at the root of a .3tz', async function () {

@@ -9,7 +9,7 @@ import type { TilesetReader } from '@src/extractor/tilesetReader';
 
 describe('RecordManager', function () {
   let manager: RecordManager;
-  let validator: { validateIngestion: ReturnType<typeof vi.fn>; validateFootprint: ReturnType<typeof vi.fn> };
+  let validator: { validateIngestion: ReturnType<typeof vi.fn> };
   let filesValidator: { validateIngestionFiles: ReturnType<typeof vi.fn> };
   let metadataExtractor: { extract: ReturnType<typeof vi.fn> };
   let productReader: { read: ReturnType<typeof vi.fn> };
@@ -17,15 +17,13 @@ describe('RecordManager', function () {
 
   const files = { modelPath: '/models/paris/data/tileset.json', product: { shp: '/models/paris/shape/Product.shp' }, metadata: {} };
   const extracted = { productId: 'p-1', srsId: '4326' };
-  const footprint = { type: 'Polygon', coordinates: [[[2.33, 48.85]]] };
-  const modelPolygon = { type: 'Polygon', coordinates: [[[2.34, 48.86]]] };
 
   beforeEach(async function () {
-    validator = { validateIngestion: vi.fn().mockResolvedValue(undefined), validateFootprint: vi.fn() };
+    validator = { validateIngestion: vi.fn().mockResolvedValue(undefined) };
     filesValidator = { validateIngestionFiles: vi.fn().mockResolvedValue(files) };
     metadataExtractor = { extract: vi.fn().mockResolvedValue(extracted) };
-    productReader = { read: vi.fn().mockResolvedValue(footprint) };
-    tilesetReader = { readModelPolygon: vi.fn().mockResolvedValue(modelPolygon) };
+    productReader = { read: vi.fn().mockResolvedValue({ type: 'Polygon', coordinates: [] }) };
+    tilesetReader = { readModelPolygon: vi.fn().mockResolvedValue({ type: 'Polygon', coordinates: [] }) };
     manager = new RecordManager(
       await jsLogger({ enabled: false }),
       validator as unknown as ValidationManager,
@@ -55,7 +53,6 @@ describe('RecordManager', function () {
       expect(productReader.read).toHaveBeenCalledWith(files.product.shp);
       expect(metadataExtractor.extract).toHaveBeenCalledWith(files);
       expect(tilesetReader.readModelPolygon).toHaveBeenCalledWith(files.modelPath);
-      expect(validator.validateFootprint).toHaveBeenCalledWith(footprint, modelPolygon);
       expect(validator.validateIngestion).toHaveBeenCalledWith(payload, extracted);
     });
 
@@ -104,25 +101,6 @@ describe('RecordManager', function () {
           region: ['France'],
         })
       ).rejects.toThrow('invalid tileset');
-      expect(validator.validateFootprint).not.toHaveBeenCalled();
-      expect(validator.validateIngestion).not.toHaveBeenCalled();
-    });
-
-    it('should reject when the footprint does not cover the model', async function () {
-      validator.validateFootprint.mockImplementation(() => {
-        throw new Error('low coverage');
-      });
-
-      await expect(
-        manager.createIngestion({
-          modelPath: 'paris/data/tileset.json',
-          productShapefilePath: 'paris/shape/Product.shp',
-          metadataShapefilePath: 'paris/shape/ShapeMetadata.shp',
-          productType: '3DPhotoRealistic',
-          classification: '4',
-          region: ['France'],
-        })
-      ).rejects.toThrow('low coverage');
       expect(validator.validateIngestion).not.toHaveBeenCalled();
     });
 

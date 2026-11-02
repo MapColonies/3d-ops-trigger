@@ -15,10 +15,6 @@ interface ProductReaderConfig {
   maxVerticesPerChunk: number;
 }
 
-interface ValidationConfig {
-  percentageLimit: number;
-}
-
 interface ExternalServicesConfig {
   catalogUrl: string;
   extractableUrl: string;
@@ -29,7 +25,6 @@ type OpsTriggerConfigType = commonBoilerplateV3Type & {
   externalServices: ExternalServicesConfig;
   paths: PathsConfig;
   productReader: ProductReaderConfig;
-  validation: ValidationConfig;
 };
 
 type ConfigType = ConfigInstance<OpsTriggerConfigType>;
@@ -41,7 +36,7 @@ const opsTriggerConfigSchema = {
     { $ref: commonBoilerplateV3.$id },
     {
       type: 'object',
-      required: ['externalServices', 'paths', 'productReader', 'validation'],
+      required: ['externalServices', 'paths', 'productReader'],
       properties: {
         paths: {
           type: 'object',
@@ -49,13 +44,6 @@ const opsTriggerConfigSchema = {
           properties: {
             basePath: { type: 'string', minLength: 1 },
             pvPath: { type: 'string', minLength: 1 },
-          },
-        },
-        validation: {
-          type: 'object',
-          required: ['percentageLimit'],
-          properties: {
-            percentageLimit: { type: 'number', minimum: 0, maximum: 100 },
           },
         },
         productReader: {
@@ -103,4 +91,4 @@ function getConfig(): ConfigType {
 }
 
 export { getConfig, initConfig };
-export type { ConfigType, LookupTablesConfig, ExternalServicesConfig, PathsConfig, ProductReaderConfig, ValidationConfig };
+export type { ConfigType, LookupTablesConfig, ExternalServicesConfig, PathsConfig, ProductReaderConfig };
