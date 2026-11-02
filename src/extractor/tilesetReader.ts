@@ -1,9 +1,11 @@
-import { readFile } from 'node:fs/promises';
+import { open, readFile, type FileHandle } from 'node:fs/promises';
 import { basename, extname } from 'node:path';
+import { inflateRawSync } from 'node:zlib';
 import type { Polygon } from 'geojson';
 import type { Logger } from '@map-colonies/js-logger';
 import { StatusCodes } from 'http-status-codes';
 import { inject, injectable } from 'tsyringe';
+import { ArchiveFunctions3tz, TilesetError, type IndexEntry } from '3d-tiles-tools';
 import {
   AppError,
   calculatePolygonFromTileset,
@@ -13,8 +15,11 @@ import {
   type TileSetJson,
 } from '@map-colonies/3d-shared';
 import { SERVICES } from '@common/constants';
-import { ERROR_3TZ_INVALID, ERROR_TILESET_INVALID, TILESET_FILENAME } from './constants';
-import { Archive3tzError, readArchiveFile } from './archive3tz';
+import { ERROR_3TZ_INVALID, ERROR_3TZ_INVALID_PREFIX, ERROR_TILESET_INVALID, ERROR_TILESET_NOT_IN_ARCHIVE, TILESET_FILENAME } from './constants';
+
+const DEFLATE_COMPRESSION = 8;
+
+type ArchiveEntry = NonNullable<ReturnType<typeof ArchiveFunctions3tz.readEntry>>;
 
 @injectable()
 export class TilesetReader {
@@ -55,12 +60,43 @@ export class TilesetReader {
 
   private async readFromArchive(archivePath: string): Promise<string> {
     const logContext = { ...this.logContext, function: this.readFromArchive.name };
+    let handle: FileHandle | undefined;
     try {
-      return (await readArchiveFile(archivePath, TILESET_FILENAME)).toString('utf-8');
+      handle = await open(archivePath, 'r');
+      const index = ArchiveFunctions3tz.readZipIndex(handle.fd);
+      const entry = this.readTilesetEntry(handle.fd, index, archivePath);
+      const data = entry.compression_method === DEFLATE_COMPRESSION ? inflateRawSync(entry.data) : entry.data;
+      return data.toString('utf-8');
     } catch (err) {
-      const message = err instanceof Archive3tzError ? err.message : ERROR_3TZ_INVALID;
-      this.reject(logContext, message, { archivePath, err });
+      if (err instanceof AppError) {
+        throw err;
+      }
+      const message = err instanceof TilesetError ? `${ERROR_3TZ_INVALID_PREFIX}: ${err.message}` : ERROR_3TZ_INVALID;
+      return this.reject(logContext, message, { archivePath, err });
+    } finally {
+      await handle?.close();
     }
+  }
+
+  private readTilesetEntry(fd: number, index: IndexEntry[], archivePath: string): ArchiveEntry {
+    const logContext = { ...this.logContext, function: this.readTilesetEntry.name };
+    const tilesetEntry = ArchiveFunctions3tz.readEntry(fd, index, TILESET_FILENAME);
+    if (tilesetEntry !== undefined) {
+      return tilesetEntry;
+    }
+
+    const rootJsonNames = [...index]
+      .sort((entryA, entryB) => Number(entryA.offset - entryB.offset))
+      .map((entry) => ArchiveFunctions3tz.readFileName(fd, entry.offset))
+      .filter((name) => !name.includes('/') && extname(name).toLowerCase() === '.json');
+    const [fallbackName] = rootJsonNames;
+    const fallbackEntry = fallbackName === undefined ? undefined : ArchiveFunctions3tz.readEntry(fd, index, fallbackName);
+    if (fallbackEntry === undefined) {
+      this.reject(logContext, ERROR_TILESET_NOT_IN_ARCHIVE, { archivePath });
+    }
+
+    this.logger.warn({ msg: `${TILESET_FILENAME} not found in the archive root, using ${fallbackName}`, logContext, archivePath, rootJsonNames });
+    return fallbackEntry;
   }
 
   private parseTileset(content: string, modelPath: string): TileSetJson {

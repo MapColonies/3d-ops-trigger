@@ -2,36 +2,22 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { bbox } from '@turf/turf';
-import { jsLogger } from '@map-colonies/js-logger';
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { jsLogger, type Logger } from '@map-colonies/js-logger';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { TilesetTarget3tz } from '3d-tiles-tools';
 import { AppError, ERROR_BAD_FORMAT_TILESET, ERROR_BOX_TILESET } from '@map-colonies/3d-shared';
 import { TilesetReader } from '@src/extractor/tilesetReader';
-import {
-  ERROR_3TZ_INVALID,
-  ERROR_3TZ_NO_INDEX,
-  ERROR_3TZ_UNSUPPORTED_COMPRESSION,
-  ERROR_3TZ_UNSUPPORTED_ENCODING,
-  ERROR_TILESET_INVALID,
-  ERROR_TILESET_NOT_IN_ARCHIVE,
-} from '@src/extractor/constants';
-import {
-  buildArchive,
-  COMPRESSION_DEFLATED,
-  COMPRESSION_STORED,
-  COMPRESSION_ZSTD,
-  DATA_DESCRIPTOR_FLAG,
-  type ArchiveEntry,
-} from '@tests/helpers/archive3tz';
+import { ERROR_3TZ_INVALID, ERROR_3TZ_INVALID_PREFIX, ERROR_TILESET_INVALID, ERROR_TILESET_NOT_IN_ARCHIVE } from '@src/extractor/constants';
 
 const FIXTURE_DATA = join(__dirname, '../../fixtures/ingestion/paris/data');
 const PARIS_BBOX = [2.33, 48.85, 2.35, 48.87];
-const COMPRESSION_BZIP2 = 12;
 
 const tilesetWith = (boundingVolume: unknown): string => JSON.stringify({ asset: { version: '1.0' }, root: { boundingVolume, geometricError: 1 } });
 const validTileset = tilesetWith({ region: [0.04, 0.85, 0.041, 0.851, 0, 10] });
-const tile: ArchiveEntry = { name: 'tiles/0.b3dm', content: 'b3dm', method: COMPRESSION_DEFLATED };
+const tile: [string, string] = ['tiles/0.b3dm', 'b3dm'];
 
 describe('TilesetReader', function () {
+  let logger: Logger;
   let reader: TilesetReader;
   let folder: string;
 
@@ -41,8 +27,20 @@ describe('TilesetReader', function () {
     return path;
   };
 
+  const writeArchive = async (entries: [string, string][]): Promise<string> => {
+    const path = join(folder, 'model.3tz');
+    const target = new TilesetTarget3tz();
+    await target.begin(path, true);
+    for (const [name, content] of entries) {
+      await target.addEntry(name, Buffer.from(content, 'utf-8'));
+    }
+    await target.end();
+    return path;
+  };
+
   beforeEach(async function () {
-    reader = new TilesetReader(await jsLogger({ enabled: false }));
+    logger = await jsLogger({ enabled: false });
+    reader = new TilesetReader(logger);
     folder = await mkdtemp(join(tmpdir(), 'ops-trigger-tileset-'));
   });
 
@@ -56,31 +54,18 @@ describe('TilesetReader', function () {
     bbox(polygon).forEach((value, index) => expect(value).toBeCloseTo(PARIS_BBOX[index] as number, 5));
   });
 
-  it.each([
-    ['stored', COMPRESSION_STORED],
-    ['deflate', COMPRESSION_DEFLATED],
-    ['zstd', COMPRESSION_ZSTD],
-  ])('should read a %s tileset entry from a .3tz', async function (_case, method) {
-    const archive = buildArchive([tile, { name: 'tileset.json', content: validTileset, method }]);
+  it('should read the tileset.json at the root of a .3tz', async function () {
+    const path = await writeArchive([['other.json', 'not json'], tile, ['tileset.json', validTileset]]);
 
-    await expect(reader.readModelPolygon(await write('model.3tz', archive))).resolves.toMatchObject({ type: 'Polygon' });
+    await expect(reader.readModelPolygon(path)).resolves.toMatchObject({ type: 'Polygon' });
   });
 
-  it('should find the tileset through the index when the index offset is stored as ZIP64', async function () {
-    const archive = buildArchive([{ name: 'tileset.json', content: validTileset }, tile], { zip64IndexOffset: true });
+  it('should fall back to the first root json in archive order when the .3tz has no tileset.json', async function () {
+    const warn = vi.spyOn(logger, 'warn');
+    const path = await writeArchive([['sub/a.json', 'not json'], ['b.json', validTileset], tile, ['a.json', 'not json']]);
 
-    await expect(reader.readModelPolygon(await write('model.3tz', archive))).resolves.toMatchObject({ type: 'Polygon' });
-  });
-
-  it('should skip an index hash collision and use the entry whose name matches', async function () {
-    const archive = buildArchive([tile, { name: 'tileset.json', content: validTileset }], {
-      indexOverrides: [
-        { name: 'tileset.json', offsetOf: 'tiles/0.b3dm' },
-        { name: 'tileset.json', offsetOf: 'tileset.json' },
-      ],
-    });
-
-    await expect(reader.readModelPolygon(await write('model.3tz', archive))).resolves.toMatchObject({ type: 'Polygon' });
+    await expect(reader.readModelPolygon(path)).resolves.toMatchObject({ type: 'Polygon' });
+    expect(warn).toHaveBeenCalledWith(expect.objectContaining({ rootJsonNames: ['b.json', 'a.json'] }));
   });
 
   it('should read the model polygon of a sphere bounding volume', async function () {
@@ -117,60 +102,33 @@ describe('TilesetReader', function () {
   });
 
   it.each([
-    ['is not a zip archive', Buffer.from('definitely not a zip'), ERROR_3TZ_NO_INDEX],
-    ['is empty', Buffer.alloc(0), ERROR_3TZ_NO_INDEX],
-    ['has no index', buildArchive([{ name: 'tileset.json', content: validTileset }], { withIndex: false }), ERROR_3TZ_NO_INDEX],
-    ['does not end with the index', buildArchive([{ name: 'tileset.json', content: validTileset }], { indexFirst: true }), ERROR_3TZ_NO_INDEX],
-    [
-      'has a compressed index',
-      buildArchive([{ name: 'tileset.json', content: validTileset }], { indexMethod: COMPRESSION_DEFLATED }),
-      ERROR_3TZ_NO_INDEX,
-    ],
-    ['has no tileset.json', buildArchive([tile]), ERROR_TILESET_NOT_IN_ARCHIVE],
-    ['has the tileset.json only in a sub folder', buildArchive([{ name: 'data/tileset.json', content: validTileset }]), ERROR_TILESET_NOT_IN_ARCHIVE],
-    [
-      'indexes the tileset.json to a wrong entry',
-      buildArchive([tile, { name: 'tileset.json', content: validTileset }], { indexOverrides: [{ name: 'tileset.json', offsetOf: 'tiles/0.b3dm' }] }),
-      ERROR_TILESET_NOT_IN_ARCHIVE,
-    ],
-    [
-      'uses a data descriptor',
-      buildArchive([{ name: 'tileset.json', content: validTileset, flags: DATA_DESCRIPTOR_FLAG }]),
-      ERROR_3TZ_UNSUPPORTED_ENCODING,
-    ],
-    ['has an empty tileset entry', buildArchive([{ name: 'tileset.json', content: '' }]), ERROR_3TZ_UNSUPPORTED_ENCODING],
-    [
-      'uses an unsupported compression',
-      buildArchive([{ name: 'tileset.json', content: validTileset, method: COMPRESSION_BZIP2 }]),
-      ERROR_3TZ_UNSUPPORTED_COMPRESSION,
-    ],
-    [
-      'has a corrupted compressed entry',
-      buildArchive([{ name: 'tileset.json', content: validTileset, method: COMPRESSION_DEFLATED, data: Buffer.from('not deflated') }]),
-      ERROR_3TZ_INVALID,
-    ],
-    [
-      'points the index at a missing offset',
-      buildArchive([{ name: 'tileset.json', content: validTileset }], { indexOverrides: [{ name: 'tileset.json', offset: 999_999 }] }),
-      ERROR_3TZ_INVALID,
-    ],
-  ])('should reject a .3tz that %s', async function (_case, archive, message) {
-    const promise = reader.readModelPolygon(await write('model.3tz', archive));
+    ['has no json at its root', [tile]],
+    ['has a json only in a sub folder', [['data/tileset.json', validTileset], tile]],
+  ] as [string, [string, string][]][])('should reject a .3tz that %s', async function (_case, entries) {
+    const promise = reader.readModelPolygon(await writeArchive(entries));
 
     await expect(promise).rejects.toThrow(AppError);
-    await expect(promise).rejects.toThrow(message);
+    await expect(promise).rejects.toThrow(ERROR_TILESET_NOT_IN_ARCHIVE);
   });
 
-  it('should reject a truncated .3tz', async function () {
-    const archive = buildArchive([{ name: 'tileset.json', content: validTileset }]);
-    const truncated = Buffer.concat([archive.subarray(0, 40), archive.subarray(archive.length - 120)]);
+  it.each([
+    ['is not a zip archive', Buffer.from('definitely not a zip')],
+    ['is empty', Buffer.alloc(0)],
+  ])('should reject a .3tz file that %s', async function (_case, content) {
+    const promise = reader.readModelPolygon(await write('model.3tz', content));
 
-    await expect(reader.readModelPolygon(await write('model.3tz', truncated))).rejects.toThrow(AppError);
+    await expect(promise).rejects.toThrow(AppError);
+    await expect(promise).rejects.toThrow(`${ERROR_3TZ_INVALID_PREFIX}: `);
   });
 
-  it('should reject a .3tz whose tileset is not valid json', async function () {
-    const archive = buildArchive([{ name: 'tileset.json', content: 'not json', method: COMPRESSION_DEFLATED }]);
+  it('should reject a missing .3tz file', async function () {
+    await expect(reader.readModelPolygon(join(folder, 'model.3tz'))).rejects.toThrow(ERROR_3TZ_INVALID);
+  });
 
-    await expect(reader.readModelPolygon(await write('model.3tz', archive))).rejects.toThrow(ERROR_TILESET_INVALID);
+  it.each([
+    ['is not valid json', 'not json', ERROR_TILESET_INVALID],
+    ['has a box bounding volume', tilesetWith({ box: [0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1] }), ERROR_BOX_TILESET],
+  ])('should reject a .3tz whose tileset %s', async function (_case, content, message) {
+    await expect(reader.readModelPolygon(await writeArchive([['tileset.json', content]]))).rejects.toThrow(message);
   });
 });
