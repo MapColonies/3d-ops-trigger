@@ -71,7 +71,7 @@ export type components = {
     };
     ingestionPayload: {
       /**
-       * @description Full share path (must start with the configured base path) to the model inside the data/ folder - a tileset.json (3D Tiles) or a .3tz file (3D Tiles Archive - its tileset.json at the root is used, otherwise the first json file at the root)
+       * @description Full share path (must start with the configured base path) to the model inside the data/ folder - a tileset.json (3D Tiles) or a .3tz file (3D Tiles Archive - its tileset.json at the root is used, otherwise the first json file at the root by name)
        * @example \\domtest\models\paris\data\tileset.json
        */
       modelPath: string;

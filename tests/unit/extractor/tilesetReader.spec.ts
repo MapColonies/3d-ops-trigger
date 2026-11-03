@@ -64,12 +64,12 @@ describe('TilesetReader', function () {
     await expect(reader.readModelPolygon(path)).resolves.toMatchObject({ type: 'Polygon' });
   });
 
-  it('should fall back to the first root json in archive order when the .3tz has no tileset.json', async function () {
+  it('should fall back to the first root json by name when the .3tz has no tileset.json', async function () {
     const warn = vi.spyOn(logger, 'warn');
-    const path = await writeArchive([['sub/a.json', 'not json'], ['b.json', validTileset], tile, ['a.json', 'not json']]);
+    const path = await writeArchive([['sub/a.json', 'not json'], ['c.json', 'not json'], tile, ['b.json', 'not json'], ['a.json', validTileset]]);
 
     await expect(reader.readModelPolygon(path)).resolves.toMatchObject({ type: 'Polygon' });
-    expect(warn).toHaveBeenCalledWith(expect.objectContaining({ rootJsonNames: ['b.json', 'a.json'] }));
+    expect(warn).toHaveBeenCalledWith(expect.objectContaining({ rootJsonNames: ['a.json', 'b.json', 'c.json'] }));
   });
 
   it('should read the model polygon of a sphere bounding volume', async function () {

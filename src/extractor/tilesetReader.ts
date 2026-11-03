@@ -1,11 +1,10 @@
-import { open, readFile, type FileHandle } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import { basename, extname } from 'node:path';
-import { inflateRawSync } from 'node:zlib';
 import type { Polygon } from 'geojson';
 import type { Logger } from '@map-colonies/js-logger';
 import { StatusCodes } from 'http-status-codes';
 import { inject, injectable } from 'tsyringe';
-import { ArchiveFunctions3tz, TilesetError, type IndexEntry } from '3d-tiles-tools';
+import { TilesetError, TilesetSources, type TilesetSource } from '3d-tiles-tools';
 import {
   AppError,
   calculatePolygonFromTileset,
@@ -16,10 +15,6 @@ import {
 } from '@map-colonies/3d-shared';
 import { SERVICES } from '@common/constants';
 import { ERROR_3TZ_INVALID, ERROR_3TZ_INVALID_PREFIX, ERROR_TILESET_INVALID, ERROR_TILESET_NOT_IN_ARCHIVE, TILESET_FILENAME } from './constants';
-
-const DEFLATE_COMPRESSION = 8;
-
-type ArchiveEntry = NonNullable<ReturnType<typeof ArchiveFunctions3tz.readEntry>>;
 
 @injectable()
 export class TilesetReader {
@@ -60,13 +55,11 @@ export class TilesetReader {
 
   private async readFromArchive(archivePath: string): Promise<string> {
     const logContext = { ...this.logContext, function: this.readFromArchive.name };
-    let handle: FileHandle | undefined;
+    let source: TilesetSource | undefined;
     try {
-      handle = await open(archivePath, 'r');
-      const index = ArchiveFunctions3tz.readZipIndex(handle.fd);
-      const entry = this.readTilesetEntry(handle.fd, index, archivePath);
-      const data = entry.compression_method === DEFLATE_COMPRESSION ? inflateRawSync(entry.data) : entry.data;
-      return data.toString('utf-8');
+      source = await TilesetSources.createAndOpen(archivePath);
+      const content = (await source.getValue(TILESET_FILENAME)) ?? (await this.readFallbackTileset(source, archivePath));
+      return content.toString('utf-8');
     } catch (err) {
       if (err instanceof AppError) {
         throw err;
@@ -74,29 +67,28 @@ export class TilesetReader {
       const message = err instanceof TilesetError ? `${ERROR_3TZ_INVALID_PREFIX}: ${err.message}` : ERROR_3TZ_INVALID;
       return this.reject(logContext, message, { archivePath, err });
     } finally {
-      await handle?.close();
+      await source?.close();
     }
   }
 
-  private readTilesetEntry(fd: number, index: IndexEntry[], archivePath: string): ArchiveEntry {
-    const logContext = { ...this.logContext, function: this.readTilesetEntry.name };
-    const tilesetEntry = ArchiveFunctions3tz.readEntry(fd, index, TILESET_FILENAME);
-    if (tilesetEntry !== undefined) {
-      return tilesetEntry;
+  private async readFallbackTileset(source: TilesetSource, archivePath: string): Promise<Buffer> {
+    const logContext = { ...this.logContext, function: this.readFallbackTileset.name };
+    const rootJsonNames: string[] = [];
+    for await (const key of await source.getKeys()) {
+      if (!key.includes('/') && extname(key).toLowerCase() === '.json') {
+        rootJsonNames.push(key);
+      }
     }
+    rootJsonNames.sort((nameA, nameB) => nameA.localeCompare(nameB));
 
-    const rootJsonNames = [...index]
-      .sort((entryA, entryB) => Number(entryA.offset - entryB.offset))
-      .map((entry) => ArchiveFunctions3tz.readFileName(fd, entry.offset))
-      .filter((name) => !name.includes('/') && extname(name).toLowerCase() === '.json');
     const [fallbackName] = rootJsonNames;
-    const fallbackEntry = fallbackName === undefined ? undefined : ArchiveFunctions3tz.readEntry(fd, index, fallbackName);
-    if (fallbackEntry === undefined) {
+    const content = fallbackName === undefined ? undefined : await source.getValue(fallbackName);
+    if (content === undefined) {
       this.reject(logContext, ERROR_TILESET_NOT_IN_ARCHIVE, { archivePath });
     }
 
     this.logger.warn({ msg: `${TILESET_FILENAME} not found in the archive root, using ${fallbackName}`, logContext, archivePath, rootJsonNames });
-    return fallbackEntry;
+    return content;
   }
 
   private parseTileset(content: string, modelPath: string): TileSetJson {
