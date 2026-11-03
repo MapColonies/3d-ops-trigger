@@ -7,4 +7,4 @@ export const TILESET_FILENAME = 'tileset.json';
 export const ERROR_TILESET_INVALID = 'tileset json is not a valid 3D Tiles tileset (missing asset/root/boundingVolume)';
 export const ERROR_3TZ_INVALID = '.3tz file is not a valid zip archive';
 export const ERROR_3TZ_INVALID_PREFIX = '.3tz archive is invalid';
-export const ERROR_TILESET_NOT_IN_ARCHIVE = `.3tz archive must contain ${TILESET_FILENAME} or another json file at its root`;
+export const ERROR_TILESET_NOT_IN_ARCHIVE = `.3tz archive must contain ${TILESET_FILENAME} at its root`;

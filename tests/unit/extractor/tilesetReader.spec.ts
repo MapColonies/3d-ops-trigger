@@ -1,8 +1,8 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { jsLogger, type Logger } from '@map-colonies/js-logger';
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { jsLogger } from '@map-colonies/js-logger';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { TilesetTarget3tz } from '3d-tiles-tools';
 import { AppError, ERROR_BAD_FORMAT_TILESET, ERROR_BOX_TILESET } from '@map-colonies/3d-shared';
 import { TilesetReader } from '@src/extractor/tilesetReader';
@@ -16,7 +16,6 @@ const validTileset = tilesetWith({ region: [0.04, 0.85, 0.041, 0.851, 0, 10] });
 const tile: [string, string] = ['tiles/0.b3dm', 'b3dm'];
 
 describe('TilesetReader', function () {
-  let logger: Logger;
   let reader: TilesetReader;
   let folder: string;
 
@@ -38,8 +37,7 @@ describe('TilesetReader', function () {
   };
 
   beforeEach(async function () {
-    logger = await jsLogger({ enabled: false });
-    reader = new TilesetReader(logger);
+    reader = new TilesetReader(await jsLogger({ enabled: false }));
     folder = await mkdtemp(join(tmpdir(), 'ops-trigger-tileset-'));
   });
 
@@ -62,14 +60,6 @@ describe('TilesetReader', function () {
     const path = await writeArchive([['other.json', 'not json'], tile, ['tileset.json', validTileset]]);
 
     await expect(reader.readModelPolygon(path)).resolves.toMatchObject({ type: 'Polygon' });
-  });
-
-  it('should fall back to the first root json by name when the .3tz has no tileset.json', async function () {
-    const warn = vi.spyOn(logger, 'warn');
-    const path = await writeArchive([['sub/a.json', 'not json'], ['c.json', 'not json'], tile, ['b.json', 'not json'], ['a.json', validTileset]]);
-
-    await expect(reader.readModelPolygon(path)).resolves.toMatchObject({ type: 'Polygon' });
-    expect(warn).toHaveBeenCalledWith(expect.objectContaining({ rootJsonNames: ['a.json', 'b.json', 'c.json'] }));
   });
 
   it('should read the model polygon of a sphere bounding volume', async function () {
@@ -106,8 +96,9 @@ describe('TilesetReader', function () {
   });
 
   it.each([
-    ['has no json at its root', [tile]],
-    ['has a json only in a sub folder', [['data/tileset.json', validTileset], tile]],
+    ['has no tileset.json', [tile]],
+    ['has another json instead of tileset.json at its root', [['other.json', validTileset], tile]],
+    ['has the tileset.json only in a sub folder', [['data/tileset.json', validTileset], tile]],
   ] as [string, [string, string][]][])('should reject a .3tz that %s', async function (_case, entries) {
     const promise = reader.readModelPolygon(await writeArchive(entries));
 

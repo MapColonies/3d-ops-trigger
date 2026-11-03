@@ -58,7 +58,10 @@ export class TilesetReader {
     let source: TilesetSource | undefined;
     try {
       source = await TilesetSources.createAndOpen(archivePath);
-      const content = (await source.getValue(TILESET_FILENAME)) ?? (await this.readFallbackTileset(source, archivePath));
+      const content = await source.getValue(TILESET_FILENAME);
+      if (content === undefined) {
+        return this.reject(logContext, ERROR_TILESET_NOT_IN_ARCHIVE, { archivePath });
+      }
       return content.toString('utf-8');
     } catch (err) {
       if (err instanceof AppError) {
@@ -69,26 +72,6 @@ export class TilesetReader {
     } finally {
       await source?.close();
     }
-  }
-
-  private async readFallbackTileset(source: TilesetSource, archivePath: string): Promise<Buffer> {
-    const logContext = { ...this.logContext, function: this.readFallbackTileset.name };
-    const rootJsonNames: string[] = [];
-    for await (const key of await source.getKeys()) {
-      if (!key.includes('/') && extname(key).toLowerCase() === '.json') {
-        rootJsonNames.push(key);
-      }
-    }
-    rootJsonNames.sort((nameA, nameB) => nameA.localeCompare(nameB));
-
-    const [fallbackName] = rootJsonNames;
-    const content = fallbackName === undefined ? undefined : await source.getValue(fallbackName);
-    if (content === undefined) {
-      this.reject(logContext, ERROR_TILESET_NOT_IN_ARCHIVE, { archivePath });
-    }
-
-    this.logger.warn({ msg: `${TILESET_FILENAME} not found in the archive root, using ${fallbackName}`, logContext, archivePath, rootJsonNames });
-    return content;
   }
 
   private parseTileset(content: string, modelPath: string): TileSetJson {
