@@ -14,7 +14,14 @@ import {
   type TileSetJson,
 } from '@map-colonies/3d-shared';
 import { SERVICES } from '@common/constants';
-import { ERROR_3TZ_INVALID, ERROR_3TZ_INVALID_PREFIX, ERROR_TILESET_INVALID, ERROR_TILESET_NOT_IN_ARCHIVE, TILESET_FILENAME } from './constants';
+import {
+  ARCHIVE_EXTENSION,
+  ERROR_3TZ_INVALID,
+  ERROR_3TZ_INVALID_PREFIX,
+  ERROR_TILESET_INVALID,
+  ERROR_TILESET_NOT_IN_ARCHIVE,
+  TILESET_FILENAME,
+} from './constants';
 
 @injectable()
 export class TilesetReader {
@@ -31,7 +38,12 @@ export class TilesetReader {
     const logContext = { ...this.logContext, function: this.readModelPolygon.name };
     this.logger.info({ msg: 'reading model polygon from tileset', logContext, modelPath });
 
-    const content = extname(modelPath).toLowerCase() === '.3tz' ? await this.readFromArchive(modelPath) : await this.readFromFile(modelPath);
+    let content: string;
+    if (extname(modelPath).toLowerCase() === ARCHIVE_EXTENSION) {
+      content = await this.readFromArchive(modelPath);
+    } else {
+      content = await this.readFromFile(modelPath);
+    }
     const tileset = this.parseTileset(content, modelPath);
 
     try {
@@ -46,6 +58,7 @@ export class TilesetReader {
 
   private async readFromFile(modelPath: string): Promise<string> {
     const logContext = { ...this.logContext, function: this.readFromFile.name };
+    this.logger.info({ msg: `reading tileset from file ${modelPath}`, logContext, modelPath });
     try {
       return await readFile(modelPath, 'utf-8');
     } catch (err) {
@@ -55,6 +68,7 @@ export class TilesetReader {
 
   private async readFromArchive(archivePath: string): Promise<string> {
     const logContext = { ...this.logContext, function: this.readFromArchive.name };
+    this.logger.info({ msg: `reading tileset from archive ${archivePath}`, logContext, archivePath });
     let source: TilesetSource | undefined;
     try {
       source = await TilesetSources.createAndOpen(archivePath);
