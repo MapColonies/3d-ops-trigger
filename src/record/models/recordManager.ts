@@ -38,12 +38,13 @@ export class RecordManager {
     this.logger.info({ msg: 'creating ingestion job', logContext, modelPath: payload.modelPath });
     const files = await this.filesValidator.validateIngestionFiles(payload);
 
-    const [, , metadata] = await Promise.all([
+    const [footprint, modelPolygon, metadata] = await Promise.all([
       this.productReader.read(files.product.shp),
       this.tilesetReader.readModelPolygon(files.modelPath),
       this.metadataExtractor.extract(files),
     ]);
 
+    this.validator.validateFootprint(footprint, modelPolygon);
     await this.validator.validateIngestion(payload, metadata);
     return { jobId: 'stub-ingestion-job-id', status: 'PENDING' };
   }

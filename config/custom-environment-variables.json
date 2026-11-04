@@ -13,6 +13,12 @@
       "__format": "number"
     }
   },
+  "validation": {
+    "intersectionPercentageLimit": {
+      "__name": "VALIDATION_INTERSECTION_PERCENTAGE_LIMIT",
+      "__format": "number"
+    }
+  },
   "paths": {
     "basePath": "BASE_PATH",
     "pvPath": "PV_SOURCE_PATH"

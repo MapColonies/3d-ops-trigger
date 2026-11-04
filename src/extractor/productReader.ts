@@ -2,13 +2,12 @@ import { basename } from 'node:path';
 import type { Logger } from '@map-colonies/js-logger';
 import { ShapefileChunkReader, type ChunkProcessor, type ShapefileChunk } from '@map-colonies/shapefile-reader';
 import { StatusCodes } from 'http-status-codes';
-import type { Feature } from 'geojson';
+import type { Feature, MultiPolygon, Polygon } from 'geojson';
 import { inject, injectable } from 'tsyringe';
 import { AppError, geometrySchema, type LogContext } from '@map-colonies/3d-shared';
 import { SERVICES } from '@common/constants';
 import type { ConfigType } from '@common/config';
 import { ERROR_PRODUCT_GEOMETRY, ERROR_PRODUCT_SINGLE_FEATURE, SHAPEFILE_NO_FEATURES_MESSAGE } from './constants';
-import type { ProductFootprint } from './interfaces';
 
 @injectable()
 export class ProductReader {
@@ -30,7 +29,7 @@ export class ProductReader {
     });
   }
 
-  public async read(productShapefilePath: string): Promise<ProductFootprint> {
+  public async read(productShapefilePath: string): Promise<Polygon | MultiPolygon> {
     const logContext = { ...this.logContext, function: this.read.name };
     this.logger.info({ msg: 'reading product shapefile', logContext, productShapefilePath });
 
