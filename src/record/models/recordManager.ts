@@ -5,6 +5,7 @@ import type { components } from '@openapi';
 import { SERVICES } from '@common/constants';
 import { ValidationManager } from '../../validator/validationManager';
 import { FilesValidator } from '../../validator/filesValidator';
+import { TilesetValidator } from '../../validator/tilesetValidator';
 import { MetadataExtractor } from '../../extractor/metadataExtractor';
 import { ProductReader } from '../../extractor/productReader';
 import { TilesetReader } from '../../extractor/tilesetReader';
@@ -25,7 +26,8 @@ export class RecordManager {
     @inject(FilesValidator) private readonly filesValidator: FilesValidator,
     @inject(MetadataExtractor) private readonly metadataExtractor: MetadataExtractor,
     @inject(ProductReader) private readonly productReader: ProductReader,
-    @inject(TilesetReader) private readonly tilesetReader: TilesetReader
+    @inject(TilesetReader) private readonly tilesetReader: TilesetReader,
+    @inject(TilesetValidator) private readonly tilesetValidator: TilesetValidator
   ) {
     this.logContext = {
       fileName: __filename,
@@ -37,6 +39,7 @@ export class RecordManager {
     const logContext = { ...this.logContext, function: this.createIngestion.name };
     this.logger.info({ msg: 'creating ingestion job', logContext, modelPath: payload.modelPath });
     const files = await this.filesValidator.validateIngestionFiles(payload);
+    await this.tilesetValidator.validate(files.modelPath);
 
     const [footprint, modelPolygon, metadata] = await Promise.all([
       this.productReader.read(files.product.shp),
