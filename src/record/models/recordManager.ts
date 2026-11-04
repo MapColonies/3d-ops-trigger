@@ -7,6 +7,7 @@ import { ValidationManager } from '../../validator/validationManager';
 import { FilesValidator } from '../../validator/filesValidator';
 import { MetadataExtractor } from '../../extractor/metadataExtractor';
 import { ProductReader } from '../../extractor/productReader';
+import { TilesetReader } from '../../extractor/tilesetReader';
 
 export type IngestionPayload = components['schemas']['ingestionPayload'];
 export type UpdatePayload = components['schemas']['updatePayload'];
@@ -23,7 +24,8 @@ export class RecordManager {
     @inject(ValidationManager) private readonly validator: ValidationManager,
     @inject(FilesValidator) private readonly filesValidator: FilesValidator,
     @inject(MetadataExtractor) private readonly metadataExtractor: MetadataExtractor,
-    @inject(ProductReader) private readonly productReader: ProductReader
+    @inject(ProductReader) private readonly productReader: ProductReader,
+    @inject(TilesetReader) private readonly tilesetReader: TilesetReader
   ) {
     this.logContext = {
       fileName: __filename,
@@ -35,7 +37,13 @@ export class RecordManager {
     const logContext = { ...this.logContext, function: this.createIngestion.name };
     this.logger.info({ msg: 'creating ingestion job', logContext, modelPath: payload.modelPath });
     const files = await this.filesValidator.validateIngestionFiles(payload);
-    const [, metadata] = await Promise.all([this.productReader.read(files.product.shp), this.metadataExtractor.extract(files)]);
+
+    const [, , metadata] = await Promise.all([
+      this.productReader.read(files.product.shp),
+      this.tilesetReader.readModelPolygon(files.modelPath),
+      this.metadataExtractor.extract(files),
+    ]);
+
     await this.validator.validateIngestion(payload, metadata);
     return { jobId: 'stub-ingestion-job-id', status: 'PENDING' };
   }

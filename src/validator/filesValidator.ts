@@ -1,4 +1,4 @@
-import { open, readFile, stat } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import { basename, dirname, extname, join, resolve, sep } from 'node:path';
 import type { Logger } from '@map-colonies/js-logger';
 import { StatusCodes } from 'http-status-codes';
@@ -8,8 +8,6 @@ import { SERVICES } from '@common/constants';
 import type { ConfigType } from '@common/config';
 import type { IngestionFiles, ShapefileFiles } from './interfaces';
 
-const ZIP_LOCAL_FILE_HEADER_SIGNATURE = 0x04034b50;
-const ZIP_SIGNATURE_LENGTH = 4;
 const VALID_CPG_ENCODINGS = ['UTF-8', 'UTF8'];
 const WGS84_DATUM_PATTERN = /DATUM\[\s*"(D_)?WGS[\s_]?(19)?84"/i;
 
@@ -25,8 +23,6 @@ export const ERROR_SHAPEFILE_NOT_IN_SHAPE = `shapefiles must be inside the "${SH
 export const ERROR_SHAPEFILES_DIFFERENT_FOLDERS = `productShapefilePath and metadataShapefilePath must be in the same "${SHAPE_FOLDER}" folder`;
 export const ERROR_PRJ_NOT_WGS84 = 'projection (.prj) must be Geographic WGS84 (EPSG:4326)';
 export const ERROR_CPG_NOT_UTF8 = 'encoding (.cpg) must be UTF-8';
-export const ERROR_TILESET_INVALID = 'tileset json is not a valid 3D Tiles tileset (missing asset/root)';
-export const ERROR_3TZ_INVALID = '.3tz file is not a valid zip archive';
 
 @injectable()
 export class FilesValidator {
@@ -60,7 +56,6 @@ export class FilesValidator {
     const metadata = this.toShapefileFiles(metadataShapefilePath);
     await this.validateExistence([modelPath, ...this.shapefilePaths(product), ...this.shapefilePaths(metadata)]);
 
-    await this.validateModelFormat(modelPath);
     await this.validateShapefileFormat(product);
     await this.validateShapefileFormat(metadata);
 
@@ -147,40 +142,6 @@ export class FilesValidator {
         return false;
       }
       throw err;
-    }
-  }
-
-  private async validateModelFormat(modelPath: string): Promise<void> {
-    const logContext = { ...this.logContext, function: this.validateModelFormat.name };
-    if (extname(modelPath).toLowerCase() === '.3tz') {
-      await this.validate3tz(modelPath);
-      return;
-    }
-
-    let tileset: unknown;
-    try {
-      tileset = JSON.parse(await readFile(modelPath, 'utf-8'));
-    } catch (err) {
-      this.reject(logContext, ERROR_TILESET_INVALID, { modelPath, err });
-    }
-
-    const { asset, root } = (tileset ?? {}) as { asset?: unknown; root?: unknown };
-    if (typeof asset !== 'object' || asset === null || typeof root !== 'object' || root === null) {
-      this.reject(logContext, ERROR_TILESET_INVALID, { modelPath });
-    }
-  }
-
-  private async validate3tz(modelPath: string): Promise<void> {
-    const logContext = { ...this.logContext, function: this.validate3tz.name };
-    const handle = await open(modelPath, 'r');
-    try {
-      const buffer = Buffer.alloc(ZIP_SIGNATURE_LENGTH);
-      const { bytesRead } = await handle.read(buffer, 0, ZIP_SIGNATURE_LENGTH, 0);
-      if (bytesRead < ZIP_SIGNATURE_LENGTH || buffer.readUInt32LE(0) !== ZIP_LOCAL_FILE_HEADER_SIGNATURE) {
-        this.reject(logContext, ERROR_3TZ_INVALID, { modelPath });
-      }
-    } finally {
-      await handle.close();
     }
   }
 
