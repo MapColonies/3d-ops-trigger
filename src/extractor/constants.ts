@@ -9,3 +9,5 @@ export const ERROR_TILESET_INVALID = 'tileset json is not a valid 3D Tiles tiles
 export const ERROR_3TZ_INVALID = '.3tz file is not a valid zip archive';
 export const ERROR_3TZ_INVALID_PREFIX = '.3tz archive is invalid';
 export const ERROR_TILESET_NOT_IN_ARCHIVE = `.3tz archive must contain ${TILESET_FILENAME} at its root`;
+export const ERROR_FOOTPRINT_FAR_FROM_MODEL = "Wrong footprint! footprint's coordinates are not even close to the model";
+export const ERROR_FOOTPRINT_COVERAGE_FAILED = 'failed to calculate the footprint coverage of the model';
