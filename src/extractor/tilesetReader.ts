@@ -18,8 +18,10 @@ import {
   ARCHIVE_EXTENSION,
   ERROR_3TZ_INVALID,
   ERROR_3TZ_INVALID_PREFIX,
+  ERROR_TILESET_ASSET_VERSION,
   ERROR_TILESET_INVALID,
   ERROR_TILESET_NOT_IN_ARCHIVE,
+  SUPPORTED_ASSET_VERSIONS,
   TILESET_FILENAME,
 } from './constants';
 
@@ -107,6 +109,11 @@ export class TilesetReader {
       root.boundingVolume === null
     ) {
       this.reject(logContext, ERROR_TILESET_INVALID, { modelPath });
+    }
+
+    const { version } = asset as { version?: unknown };
+    if (typeof version !== 'string' || !SUPPORTED_ASSET_VERSIONS.includes(version)) {
+      this.reject(logContext, ERROR_TILESET_ASSET_VERSION, { modelPath, version });
     }
     return tileset as TileSetJson;
   }

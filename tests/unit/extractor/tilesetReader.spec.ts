@@ -6,12 +6,20 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { TilesetTarget3tz } from '3d-tiles-tools';
 import { AppError, ERROR_BAD_FORMAT_TILESET, ERROR_BOX_TILESET } from '@map-colonies/3d-shared';
 import { TilesetReader } from '@src/extractor/tilesetReader';
-import { ERROR_3TZ_INVALID, ERROR_3TZ_INVALID_PREFIX, ERROR_TILESET_INVALID, ERROR_TILESET_NOT_IN_ARCHIVE } from '@src/extractor/constants';
+import {
+  ERROR_3TZ_INVALID,
+  ERROR_3TZ_INVALID_PREFIX,
+  ERROR_TILESET_ASSET_VERSION,
+  ERROR_TILESET_INVALID,
+  ERROR_TILESET_NOT_IN_ARCHIVE,
+} from '@src/extractor/constants';
 
 const FIXTURE_DATA = join(__dirname, '../../fixtures/ingestion/paris/data');
 const PARIS_BBOX = [2.33, 48.85, 2.35, 48.87];
 
 const tilesetWith = (boundingVolume: unknown): string => JSON.stringify({ asset: { version: '1.0' }, root: { boundingVolume, geometricError: 1 } });
+const tilesetWithAsset = (asset: unknown): string =>
+  JSON.stringify({ asset, root: { boundingVolume: { region: [0.04, 0.85, 0.041, 0.851, 0, 10] }, geometricError: 1 } });
 const validTileset = tilesetWith({ region: [0.04, 0.85, 0.041, 0.851, 0, 10] });
 const tile: [string, string] = ['tiles/0.b3dm', 'b3dm'];
 
@@ -66,6 +74,22 @@ describe('TilesetReader', function () {
     const path = await write('tileset.json', tilesetWith({ sphere: [4201000, 171000, 4780000, 100] }));
 
     await expect(reader.readModelPolygon(path)).resolves.toMatchObject({ type: 'Polygon' });
+  });
+
+  it.each(['0.0', '1.0', '1.1'])('should read a tileset with asset.version %s', async function (version) {
+    const path = await write('tileset.json', tilesetWithAsset({ version }));
+
+    await expect(reader.readModelPolygon(path)).resolves.toMatchObject({ type: 'Polygon' });
+  });
+
+  it.each([
+    ['missing', {}],
+    ['not supported', { version: '2.0' }],
+    ['not a string', { version: 1 }],
+  ])('should reject a tileset whose asset.version is %s', async function (_case, asset) {
+    const path = await write('tileset.json', tilesetWithAsset(asset));
+
+    await expect(reader.readModelPolygon(path)).rejects.toThrow(ERROR_TILESET_ASSET_VERSION);
   });
 
   it.each([
