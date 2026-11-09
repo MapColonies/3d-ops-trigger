@@ -1,5 +1,6 @@
 global:
   cloudProvider: {}
+  NFS: {}
   telemetry:
     tracing: {}
     logger:
@@ -8,7 +9,7 @@ global:
 mclabels:
   component: backend
   partOf: 3d
-  owner: common
+  owner: 3d
   prometheus:
     enabled: true
 
@@ -22,7 +23,7 @@ nameOverride: ""
 fullnameOverride: ""
 
 configManagement:
-  offlineMode: false
+  offlineMode: true
   name: '3d-ops-trigger'
   version: 'latest'
   serverUrl: 'http://localhost:8080/api'
@@ -78,32 +79,35 @@ server:
   responseCompressionEnabled: true
   requestPayloadLimit: 1mb
 
-externalServices:
-  catalog: ''
+NFS:
+  name: ''
+  pv_path: ''
+  sub_path: ''
+
+validations:
   lookupTables:
     url: ''
     subUrl: ''
 
-jobManager:
-  url:
-  ingestion:
-    jobType: ''
-    taskType: ''
-    batches:
-  delete:
-    jobType: ''
-    taskType: ''
-
-provider: 'NFS'
-NFS:
-  pvPath: ''
-S3:
-  endpointUrl: ''
-  bucket: ''
-  region: ''
-  forcePathStyle: true
-  sslEnabled: false
-  maxAttempts: 3
+env:
+  basePath: ''
+  productReader:
+    maxVerticesPerChunk: 10000
+  validation:
+    intersectionPercentageLimit: 10
+  catalog:
+    url:
+  extractable:
+    url:
+  jobManager:
+    url:
+    ingestion:
+      jobType: Ingestion_New_3D
+      taskType: tilesCopying
+      batches: 100
+    delete:
+      jobType: Delete_3D
+      taskType: deleteModel
 
 telemetry:
   logger:

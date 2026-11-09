@@ -1,12 +1,13 @@
 {{- $server := .Values.server -}}
 {{- $telemetry := .Values.telemetry -}}
-{{- $tracingUrl := include "ts-server-boilerplate.tracingUrl" . -}}
-{{- $opentelemetryLoggingUrl := include "ts-server-boilerplate.opentelemetryLoggingUrl" . -}}
+{{- $tracingUrl := include "3d-ops-trigger.tracingUrl" . -}}
+{{- $opentelemetryLoggingUrl := include "3d-ops-trigger.opentelemetryLoggingUrl" . -}}
+{{- $NFS := include "3d-ops-trigger.NFS" . | fromYaml -}}
 {{- if .Values.enabled -}}
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: {{ include "ts-server-boilerplate.fullname" . }}
+  name: {{ include "3d-ops-trigger.fullname" . }}
 data:
   {{- with $server }}
   REQUEST_PAYLOAD_LIMIT: {{ .requestPayloadLimit | quote }}
@@ -20,7 +21,7 @@ data:
   OPENTELEMETRY_LOGGING_ENABLED: 'true'
   OTLP_LOGGER_ENDPOINT_URL: {{ $opentelemetryLoggingUrl | quote }}
   {{- if .resourceAttributes }}
-  OTEL_RESOURCE_ATTRIBUTES: {{ include "ts-server-boilerplate.otelResourceAttributes" .resourceAttributes | quote }}
+  OTEL_RESOURCE_ATTRIBUTES: {{ include "3d-ops-trigger.otelResourceAttributes" .resourceAttributes | quote }}
   {{- end }}
   {{- end }}
   {{- end }}
@@ -30,34 +31,21 @@ data:
   {{- end }}
   {{- end }}
   npm_config_cache: /tmp/
-  {{- with .Values.externalServices }}
-  CATALOG_URL: {{ .catalog | quote }}
-  {{- with .lookupTables }}
-  LOOKUP_TABLES_URL: {{ .url | quote }}
-  LOOKUP_TABLES_SUB_URL: {{ .subUrl | quote }}
-  {{- end }}
-  {{- end }}
-  {{- with .Values.jobManager }}
-  JOB_MANAGER_URL: {{ .url | quote }}
+  PRODUCT_READER_MAX_VERTICES_PER_CHUNK: {{ .Values.env.productReader.maxVerticesPerChunk | quote }}
+  VALIDATION_INTERSECTION_PERCENTAGE_LIMIT: {{ .Values.env.validation.intersectionPercentageLimit | quote }}
+  BASE_PATH: {{ tpl .Values.env.basePath . | quote }}
+  PV_SOURCE_PATH: {{ $NFS.pv_path | quote }}
+  CATALOG_URL: {{ .Values.env.catalog.url | default (printf "http://%s-catalog" .Release.Name) }}
+  EXTRACTABLE_URL: {{ .Values.env.extractable.url | default (printf "http://%s-extractable" .Release.Name) }}
+  LOOKUP_TABLES_URL: {{ .Values.validations.lookupTables.url | quote }}
+  LOOKUP_TABLES_SUB_URL: {{ .Values.validations.lookupTables.subUrl | quote }}
+  {{- with .Values.env.jobManager }}
+  JOB_MANAGER_URL: {{ .url | default (printf "http://%s-job-manager" $.Release.Name) | quote }}
   JOB_INGESTION_TYPE: {{ .ingestion.jobType | quote }}
   TASK_INGESTION_TYPE: {{ .ingestion.taskType | quote }}
   INGESTION_TASK_BATCHES: {{ .ingestion.batches | quote }}
   JOB_DELETE_TYPE: {{ .delete.jobType | quote }}
   TASK_DELETE_TYPE: {{ .delete.taskType | quote }}
-  {{- end }}
-  PROVIDER_FROM: {{ .Values.provider | quote }}
-  {{- if eq .Values.provider "NFS" }}
-  PV_SOURCE_PATH: {{ .Values.NFS.pvPath | quote }}
-  {{- end }}
-  {{- if eq .Values.provider "S3" }}
-  {{- with .Values.S3 }}
-  S3_ENDPOINT_URL: {{ .endpointUrl | quote }}
-  S3_BUCKET: {{ .bucket | quote }}
-  S3_REGION: {{ .region | quote }}
-  S3_FORCE_PATH_STYLE: {{ .forcePathStyle | quote }}
-  S3_SSL_ENABLED: {{ .sslEnabled | quote }}
-  S3_MAX_ATTEMPTS: {{ .maxAttempts | quote }}
-  {{- end }}
   {{- end }}
   {{- with .Values.configManagement }}
   CONFIG_NAME: {{ .name | quote }}

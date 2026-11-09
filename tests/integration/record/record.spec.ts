@@ -1,45 +1,56 @@
 import { jsLogger } from '@map-colonies/js-logger';
-import { describe, beforeEach, it, expect, beforeAll, vi } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
+import nock from 'nock';
 import { trace } from '@opentelemetry/api';
 import httpStatusCodes from 'http-status-codes';
 import { createRequestSender, type RequestSender } from '@map-colonies/openapi-supertest';
 import type { paths, operations } from '@openapi';
 import { getApp } from '@src/app';
 import { SERVICES } from '@common/constants';
-import { initConfig } from '@src/common/config';
-import { LookupTablesCall } from '@src/externalServices/lookupTables/lookupTablesCall';
-import { CatalogCall } from '@src/externalServices/catalog/catalogCall';
+import { getConfig, initConfig, type LookupTablesConfig } from '@src/common/config';
+import type { IngestionPayload } from '@src/record/models/recordManager';
 import { JobnikClient } from '@src/externalServices/jobnik/jobnikClient';
-import { buildValidMetadata } from '@tests/helpers/metadata';
+import { ERROR_DELETE_RECORD_NOT_FOUND, ERROR_DELETE_STATUS, ERROR_PRODUCT_NAME_IN_FLIGHT } from '@src/validator/validationManager';
+
+const ingestionPayload: IngestionPayload = {
+  modelPath: '\\\\domtest\\models\\paris\\data\\tileset.json',
+  productShapefilePath: '\\\\domtest\\models\\paris\\shape\\Product.shp',
+  metadataShapefilePath: '\\\\domtest\\models\\paris\\shape\\ShapeMetadata.shp',
+  productType: '3DPhotoRealistic',
+  classification: '4',
+  region: ['France'],
+};
 
 const deletableRecord = {
   id: 'rec-1',
-  productId: 'p-1',
-  productName: 'afula',
+  productId: 'PRS',
+  productName: 'paris',
   productType: '3DPhotoRealistic',
   productVersion: 1,
   producerName: 'IDFMU',
   productStatus: 'UNPUBLISHED',
 };
 
-const lookupStub = { getClassifications: vi.fn().mockResolvedValue(['abc123']) } as unknown as LookupTablesCall;
-// findRecords by id (delete) → an existing deletable record; by productName (uniqueness) → none
-const catalogStub = {
-  findRecords: vi.fn().mockImplementation((payload: { id?: string }) => (payload.id !== undefined ? [deletableRecord] : [])),
-} as unknown as CatalogCall;
 const jobnikStub = {
-  createIngestionJob: vi.fn().mockResolvedValue({ jobId: 'job-1', status: 'PENDING' }),
-  createDeleteJob: vi.fn().mockResolvedValue({ jobId: 'del-1', status: 'PENDING' }),
-  hasInFlightIngestionJob: vi.fn().mockResolvedValue(false),
-} as unknown as JobnikClient;
-const providerStub = { fileExists: vi.fn().mockResolvedValue(true) };
+  createIngestionJob: vi.fn(),
+  createDeleteJob: vi.fn(),
+  hasInFlightIngestionJob: vi.fn(),
+};
 
-const validMetadata = buildValidMetadata();
+let lookupTables: LookupTablesConfig;
+let catalogUrl: string;
 
-const validIngestionPayload = {
-  modelPath: '/shared/models/afula',
-  tilesetFilename: 'tileset.json',
-  metadata: validMetadata,
+const mockLookupTables = (): void => {
+  nock(lookupTables.url)
+    .persist()
+    .get(`/${lookupTables.subUrl}/classification`)
+    .reply(httpStatusCodes.OK, [{ value: '4', translationCode: 'restricted' }])
+    .get(`/${lookupTables.subUrl}/countries`)
+    .reply(httpStatusCodes.OK, [{ value: 'France', translationCode: 'france' }]);
+};
+
+const mockCatalogFind = (records: unknown[] = []): void => {
+  nock(catalogUrl).persist().post('/metadata/find').reply(httpStatusCodes.OK, records);
 };
 
 describe('record', function () {
@@ -47,96 +58,287 @@ describe('record', function () {
 
   beforeAll(async function () {
     await initConfig(true);
-  });
+    lookupTables = getConfig().get('externalServices.lookupTables');
+    catalogUrl = getConfig().get('externalServices.catalogUrl');
+    const externalHosts = [new URL(lookupTables.url).host, new URL(catalogUrl).host];
+    nock.disableNetConnect();
+    nock.enableNetConnect((host) => !externalHosts.includes(host));
 
-  beforeEach(async function () {
     const [app] = await getApp({
       override: [
         { token: SERVICES.LOGGER, provider: { useValue: await jsLogger({ enabled: false }) } },
         { token: SERVICES.TRACER, provider: { useValue: trace.getTracer('testTracer') } },
-        { token: LookupTablesCall, provider: { useValue: lookupStub } },
-        { token: CatalogCall, provider: { useValue: catalogStub } },
-        { token: JobnikClient, provider: { useValue: jobnikStub } },
-        { token: SERVICES.PROVIDER, provider: { useValue: providerStub } },
+        { token: JobnikClient, provider: { useValue: jobnikStub as unknown as JobnikClient } },
       ],
       useChild: true,
     });
     requestSender = await createRequestSender<paths, operations>('openapi3.yaml', app);
   });
 
+  beforeEach(function () {
+    jobnikStub.createIngestionJob.mockReset().mockResolvedValue({ jobId: 'job-1', status: 'PENDING' });
+    jobnikStub.createDeleteJob.mockReset().mockResolvedValue({ jobId: 'del-1', status: 'PENDING' });
+    jobnikStub.hasInFlightIngestionJob.mockReset().mockResolvedValue(false);
+  });
+
+  afterEach(function () {
+    nock.cleanAll();
+  });
+
   describe('POST /record', function () {
-    it('should return 201 and a job response for a valid ingestion request', async function () {
-      const response = await requestSender.createRecord({ requestBody: validIngestionPayload });
+    describe('Happy Path 🙂', function () {
+      it.each([
+        ['a tileset.json model', '\\\\domtest\\models\\paris\\data\\tileset.json'],
+        ['a .3tz model', '\\\\domtest\\models\\paris\\data\\model.3tz'],
+      ])('should return 201 and a job response for %s', async function (_case, modelPath) {
+        mockLookupTables();
+        mockCatalogFind();
 
-      expect(response).toSatisfyApiSpec();
-      expect(response.status).toBe(httpStatusCodes.CREATED);
+        const response = await requestSender.createRecord({ requestBody: { ...ingestionPayload, modelPath } });
 
-      const body = response.body as paths['/record']['post']['responses']['201']['content']['application/json'];
-
-      expect(body.jobId).toBeTypeOf('string');
-      expect(body.status).toBeTypeOf('string');
+        expect(response).toSatisfyApiSpec();
+        expect(response.status).toBe(httpStatusCodes.CREATED);
+        expect(response.body).toEqual({ jobId: 'job-1', status: 'PENDING' });
+        expect(jobnikStub.createIngestionJob).toHaveBeenCalledWith({
+          modelPath,
+          metadata: expect.objectContaining({
+            productType: '3DPhotoRealistic',
+            classification: '4',
+            region: ['France'],
+            productName: 'paris',
+          }) as unknown,
+        });
+      });
     });
 
-    it('should return 400 when a required field is missing', async function () {
-      const response = await requestSender.createRecord({
-        // @ts-expect-error intentionally invalid: missing tilesetFilename and metadata
-        requestBody: { modelPath: '/shared/models/afula' },
+    describe('Bad Path 😡', function () {
+      it.each(['modelPath', 'productShapefilePath', 'metadataShapefilePath', 'productType', 'classification', 'region'] as const)(
+        'should return 400 when the required field %s is missing',
+        async function (field) {
+          const requestBody: Partial<IngestionPayload> = { ...ingestionPayload };
+          delete requestBody[field];
+
+          const response = await requestSender.createRecord({ requestBody: requestBody as IngestionPayload });
+
+          expect(response).toSatisfyApiSpec();
+          expect(response.status).toBe(httpStatusCodes.BAD_REQUEST);
+          expect(response.body).toHaveProperty('message', expect.stringContaining(field));
+        }
+      );
+
+      it.each([
+        ["modelPath can't be empty", { modelPath: '' }, 'modelPath'],
+        ["productShapefilePath can't be empty", { productShapefilePath: '' }, 'productShapefilePath'],
+        ["metadataShapefilePath can't be empty", { metadataShapefilePath: '' }, 'metadataShapefilePath'],
+        ['classification is empty', { classification: '' }, 'classification'],
+        ['region is empty', { region: [] }, 'region'],
+        ["a region value can't be empty", { region: ['France', ''] }, 'region/1'],
+        ['the classification value is not in the lookup table', { classification: 'notInLookup' }, 'classification'],
+        ['invalid region value', { region: ['invalid-region'] }, 'region'],
+        ['region values must be unique', { region: ['France', 'France'] }, 'region'],
+        ['invalid productType value', { productType: 'NOT_A_3D_TYPE' }, 'productType'],
+        ['invalid classification value', { classification: '4-a' }, 'classification'],
+      ])('should return 400 when %s', async function (_case, override, field) {
+        mockLookupTables();
+
+        const response = await requestSender.createRecord({ requestBody: { ...ingestionPayload, ...override } as IngestionPayload });
+
+        expect(response).toSatisfyApiSpec();
+        expect(response.status).toBe(httpStatusCodes.BAD_REQUEST);
+        expect(response.body).toHaveProperty('message', expect.stringContaining(field));
       });
 
-      expect(response).toSatisfyApiSpec();
-      expect(response.status).toBe(httpStatusCodes.BAD_REQUEST);
+      it.each([
+        ['an unknown field', { unknownField: 'x' }],
+        ['productName', { productName: 'paris' }],
+        ['productId', { productId: 'paris-1' }],
+      ])('should return 400 when %s is sent', async function (_case, extraField) {
+        const response = await requestSender.createRecord({ requestBody: { ...ingestionPayload, ...extraField } });
+
+        expect(response).toSatisfyApiSpec();
+        expect(response.status).toBe(httpStatusCodes.BAD_REQUEST);
+        expect(response.body).toHaveProperty('message', 'request/body must NOT have additional properties');
+      });
+
+      it('should return 400 when the body is empty', async function () {
+        const response = await requestSender.createRecord({ requestBody: {} as IngestionPayload });
+
+        expect(response).toSatisfyApiSpec();
+        expect(response.status).toBe(httpStatusCodes.BAD_REQUEST);
+      });
+
+      it('should return 400 when a model file does not exist', async function () {
+        const response = await requestSender.createRecord({
+          requestBody: { ...ingestionPayload, modelPath: '\\\\domtest\\models\\paris\\data\\missing.json' },
+        });
+
+        expect(response).toSatisfyApiSpec();
+        expect(response.status).toBe(httpStatusCodes.BAD_REQUEST);
+        expect(response.body).toHaveProperty('message', 'missing files: paris/data/missing.json');
+      });
+
+      it('should return 400 when a path is not under the base path', async function () {
+        const response = await requestSender.createRecord({
+          requestBody: { ...ingestionPayload, modelPath: '\\\\other\\share\\paris\\data\\tileset.json' },
+        });
+
+        expect(response).toSatisfyApiSpec();
+        expect(response.status).toBe(httpStatusCodes.BAD_REQUEST);
+        expect(response.body).toHaveProperty('message', expect.stringContaining("isn't in the agreed folder"));
+      });
+
+      it('should return 400 when the product already exists in the catalog', async function () {
+        mockLookupTables();
+        mockCatalogFind([{ id: 'existing', productId: 'PRS', productName: 'paris' }]);
+
+        const response = await requestSender.createRecord({ requestBody: ingestionPayload });
+
+        expect(response).toSatisfyApiSpec();
+        expect(response.status).toBe(httpStatusCodes.BAD_REQUEST);
+        expect(response.body).toHaveProperty('message', 'product id is not unique!');
+      });
+
+      it('should return 409 when the product name already has an in-flight ingestion job', async function () {
+        mockLookupTables();
+        mockCatalogFind();
+        jobnikStub.hasInFlightIngestionJob.mockResolvedValue(true);
+
+        const response = await requestSender.createRecord({ requestBody: ingestionPayload });
+
+        expect(response).toSatisfyApiSpec();
+        expect(response.status).toBe(httpStatusCodes.CONFLICT);
+        expect(response.body).toHaveProperty('message', ERROR_PRODUCT_NAME_IN_FLIGHT);
+        expect(jobnikStub.createIngestionJob).not.toHaveBeenCalled();
+      });
     });
 
-    it('should return 400 when metadata fails business validation', async function () {
-      const response = await requestSender.createRecord({
-        requestBody: { ...validIngestionPayload, metadata: { ...validMetadata, productType: 'NOT_A_3D_TYPE' } },
+    describe('Sad Path 😥', function () {
+      it('should return 500 when the lookup-tables service is down', async function () {
+        nock(lookupTables.url).get(`/${lookupTables.subUrl}/classification`).reply(httpStatusCodes.SERVICE_UNAVAILABLE);
+
+        const response = await requestSender.createRecord({ requestBody: ingestionPayload });
+
+        expect(response).toSatisfyApiSpec();
+        expect(response.status).toBe(httpStatusCodes.INTERNAL_SERVER_ERROR);
       });
 
-      expect(response).toSatisfyApiSpec();
-      expect(response.status).toBe(httpStatusCodes.BAD_REQUEST);
+      it('should return 500 when the catalog service is down', async function () {
+        mockLookupTables();
+        nock(catalogUrl).post('/metadata/find').reply(httpStatusCodes.SERVICE_UNAVAILABLE);
+
+        const response = await requestSender.createRecord({ requestBody: ingestionPayload });
+
+        expect(response).toSatisfyApiSpec();
+        expect(response.status).toBe(httpStatusCodes.INTERNAL_SERVER_ERROR);
+      });
     });
   });
 
   describe('DELETE /record/{id}', function () {
-    it('should return 200 and a job response', async function () {
-      const response = await requestSender.deleteRecord({ pathParams: { id: 'rec-1' } });
+    describe('Happy Path 🙂', function () {
+      it('should return 200 and a job response', async function () {
+        mockCatalogFind([deletableRecord]);
 
-      expect(response).toSatisfyApiSpec();
-      expect(response.status).toBe(httpStatusCodes.OK);
+        const response = await requestSender.deleteRecord({ pathParams: { id: 'rec-1' } });
 
-      const body = response.body as paths['/record/{id}']['delete']['responses']['200']['content']['application/json'];
+        expect(response).toSatisfyApiSpec();
+        expect(response.status).toBe(httpStatusCodes.OK);
+        expect(response.body).toEqual({ jobId: 'del-1', status: 'PENDING' });
+        expect(jobnikStub.createDeleteJob).toHaveBeenCalledWith(deletableRecord);
+      });
+    });
 
-      expect(body.jobId).toBeTypeOf('string');
+    describe('Bad Path 😡', function () {
+      it('should return 400 when the record does not exist', async function () {
+        mockCatalogFind();
+
+        const response = await requestSender.deleteRecord({ pathParams: { id: 'missing' } });
+
+        expect(response).toSatisfyApiSpec();
+        expect(response.status).toBe(httpStatusCodes.BAD_REQUEST);
+        expect(response.body).toHaveProperty('message', ERROR_DELETE_RECORD_NOT_FOUND);
+        expect(jobnikStub.createDeleteJob).not.toHaveBeenCalled();
+      });
+
+      it('should return 400 when the record is published', async function () {
+        mockCatalogFind([{ ...deletableRecord, productStatus: 'PUBLISHED' }]);
+
+        const response = await requestSender.deleteRecord({ pathParams: { id: 'rec-1' } });
+
+        expect(response).toSatisfyApiSpec();
+        expect(response.status).toBe(httpStatusCodes.BAD_REQUEST);
+        expect(response.body).toHaveProperty('message', ERROR_DELETE_STATUS);
+      });
+    });
+
+    describe('Sad Path 😥', function () {
+      it('should return 500 when the catalog service is down', async function () {
+        nock(catalogUrl).post('/metadata/find').reply(httpStatusCodes.SERVICE_UNAVAILABLE);
+
+        const response = await requestSender.deleteRecord({ pathParams: { id: 'rec-1' } });
+
+        expect(response).toSatisfyApiSpec();
+        expect(response.status).toBe(httpStatusCodes.INTERNAL_SERVER_ERROR);
+      });
     });
   });
 
   describe('PATCH /record/{id}', function () {
-    it('should return 200 and an ack for a metadata update', async function () {
-      const response = await requestSender.updateRecord({ pathParams: { id: 'rec-1' }, requestBody: { description: 'updated' } });
+    describe('Happy Path 🙂', function () {
+      it('should return 200 and an ack for a metadata update', async function () {
+        const response = await requestSender.updateRecord({ pathParams: { id: 'rec-1' }, requestBody: { description: 'updated' } });
 
-      expect(response).toSatisfyApiSpec();
-      expect(response.status).toBe(httpStatusCodes.OK);
-      expect(response.body.message).toBeTypeOf('string');
+        expect(response).toSatisfyApiSpec();
+        expect(response.status).toBe(httpStatusCodes.OK);
+        expect(response.body.message).toBeTypeOf('string');
+      });
+    });
+
+    describe('Bad Path 😡', function () {
+      it('should return 400 when the body is not an object', async function () {
+        const response = await requestSender.updateRecord({
+          pathParams: { id: 'rec-1' },
+          requestBody: ['description'] as unknown as Record<string, never>,
+        });
+
+        expect(response).toSatisfyApiSpec();
+        expect(response.status).toBe(httpStatusCodes.BAD_REQUEST);
+      });
     });
   });
 
   describe('PATCH /record/status/{id}', function () {
-    it('should return 200 and an ack for a valid status change', async function () {
-      const response = await requestSender.updateRecordStatus({ pathParams: { id: 'rec-1' }, requestBody: { status: 'PUBLISHED' } });
+    describe('Happy Path 🙂', function () {
+      it('should return 200 and an ack for a valid status change', async function () {
+        const response = await requestSender.updateRecordStatus({ pathParams: { id: 'rec-1' }, requestBody: { status: 'PUBLISHED' } });
 
-      expect(response).toSatisfyApiSpec();
-      expect(response.status).toBe(httpStatusCodes.OK);
+        expect(response).toSatisfyApiSpec();
+        expect(response.status).toBe(httpStatusCodes.OK);
+      });
     });
 
-    it('should return 400 for an invalid status value', async function () {
-      const response = await requestSender.updateRecordStatus({
-        pathParams: { id: 'rec-1' },
-        // @ts-expect-error intentionally invalid status enum value
-        requestBody: { status: 'NOT_A_STATUS' },
+    describe('Bad Path 😡', function () {
+      it('should return 400 for an invalid status value', async function () {
+        const response = await requestSender.updateRecordStatus({
+          pathParams: { id: 'rec-1' },
+          // @ts-expect-error intentionally invalid status enum value
+          requestBody: { status: 'NOT_A_STATUS' },
+        });
+
+        expect(response).toSatisfyApiSpec();
+        expect(response.status).toBe(httpStatusCodes.BAD_REQUEST);
       });
 
-      expect(response).toSatisfyApiSpec();
-      expect(response.status).toBe(httpStatusCodes.BAD_REQUEST);
+      it('should return 400 when the status is missing', async function () {
+        const response = await requestSender.updateRecordStatus({
+          pathParams: { id: 'rec-1' },
+          requestBody: {} as { status: 'PUBLISHED' },
+        });
+
+        expect(response).toSatisfyApiSpec();
+        expect(response.status).toBe(httpStatusCodes.BAD_REQUEST);
+        expect(response.body).toHaveProperty('message', expect.stringContaining('status'));
+      });
     });
   });
 });

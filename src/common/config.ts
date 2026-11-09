@@ -6,9 +6,17 @@ interface LookupTablesConfig {
   subUrl: string;
 }
 
-interface ExternalServicesConfig {
-  lookupTables: LookupTablesConfig;
-  catalog: string;
+interface PathsConfig {
+  basePath: string;
+  pvPath: string;
+}
+
+interface ProductReaderConfig {
+  maxVerticesPerChunk: number;
+}
+
+interface ValidationConfig {
+  intersectionPercentageLimit: number;
 }
 
 interface JobManagerConfig {
@@ -24,31 +32,18 @@ interface JobManagerConfig {
   };
 }
 
-interface NFSConfig {
-  pvPath: string;
+interface ExternalServicesConfig {
+  catalogUrl: string;
+  extractableUrl: string;
+  lookupTables: LookupTablesConfig;
 }
-
-interface S3Config {
-  accessKeyId: string;
-  secretAccessKey: string;
-  endpointUrl: string;
-  bucket: string;
-  region: string;
-  forcePathStyle: boolean;
-  sslEnabled: boolean;
-  maxAttempts: number;
-}
-
-type ProviderSource = 'NFS' | 'S3';
 
 type OpsTriggerConfigType = commonBoilerplateV3Type & {
   externalServices: ExternalServicesConfig;
+  paths: PathsConfig;
+  productReader: ProductReaderConfig;
+  validation: ValidationConfig;
   jobManager: JobManagerConfig;
-  provider: ProviderSource;
-  // eslint-disable-next-line @typescript-eslint/naming-convention
-  NFS: NFSConfig;
-  // eslint-disable-next-line @typescript-eslint/naming-convention
-  S3: S3Config;
 };
 
 type ConfigType = ConfigInstance<OpsTriggerConfigType>;
@@ -60,43 +55,28 @@ const opsTriggerConfigSchema = {
     { $ref: commonBoilerplateV3.$id },
     {
       type: 'object',
-      required: ['externalServices', 'jobManager', 'provider'],
+      required: ['externalServices', 'paths', 'productReader', 'validation', 'jobManager'],
       properties: {
-        provider: { type: 'string', enum: ['NFS', 'S3'] },
-        // eslint-disable-next-line @typescript-eslint/naming-convention
-        NFS: {
+        paths: {
           type: 'object',
-          required: ['pvPath'],
-          properties: { pvPath: { type: 'string' } },
-        },
-        // eslint-disable-next-line @typescript-eslint/naming-convention
-        S3: {
-          type: 'object',
-          required: ['accessKeyId', 'secretAccessKey', 'endpointUrl', 'bucket', 'region', 'forcePathStyle', 'sslEnabled', 'maxAttempts'],
+          required: ['basePath', 'pvPath'],
           properties: {
-            accessKeyId: { type: 'string' },
-            secretAccessKey: { type: 'string' },
-            endpointUrl: { type: 'string' },
-            bucket: { type: 'string' },
-            region: { type: 'string' },
-            forcePathStyle: { type: 'boolean' },
-            sslEnabled: { type: 'boolean' },
-            maxAttempts: { type: 'number' },
+            basePath: { type: 'string', minLength: 1 },
+            pvPath: { type: 'string', minLength: 1 },
           },
         },
-        externalServices: {
+        validation: {
           type: 'object',
-          required: ['lookupTables', 'catalog'],
+          required: ['intersectionPercentageLimit'],
           properties: {
-            lookupTables: {
-              type: 'object',
-              required: ['url', 'subUrl'],
-              properties: {
-                url: { type: 'string' },
-                subUrl: { type: 'string' },
-              },
-            },
-            catalog: { type: 'string' },
+            intersectionPercentageLimit: { type: 'number', minimum: 0, maximum: 100 },
+          },
+        },
+        productReader: {
+          type: 'object',
+          required: ['maxVerticesPerChunk'],
+          properties: {
+            maxVerticesPerChunk: { type: 'integer', minimum: 1 },
           },
         },
         jobManager: {
@@ -123,6 +103,22 @@ const opsTriggerConfigSchema = {
             },
           },
         },
+        externalServices: {
+          type: 'object',
+          required: ['catalogUrl', 'extractableUrl', 'lookupTables'],
+          properties: {
+            extractableUrl: { type: 'string' },
+            lookupTables: {
+              type: 'object',
+              required: ['url', 'subUrl'],
+              properties: {
+                url: { type: 'string' },
+                subUrl: { type: 'string' },
+              },
+            },
+            catalogUrl: { type: 'string' },
+          },
+        },
       },
     },
   ],
@@ -145,4 +141,4 @@ function getConfig(): ConfigType {
 }
 
 export { getConfig, initConfig };
-export type { ConfigType, LookupTablesConfig, ExternalServicesConfig, JobManagerConfig, NFSConfig, S3Config, ProviderSource };
+export type { ConfigType, JobManagerConfig, LookupTablesConfig, ExternalServicesConfig, PathsConfig, ProductReaderConfig, ValidationConfig };

@@ -1,15 +1,15 @@
+import { extname } from 'node:path';
 import { inject, singleton } from 'tsyringe';
 import { StatusCodes } from 'http-status-codes';
 import type { Logger } from '@map-colonies/js-logger';
 import type { Registry } from 'prom-client';
 import { JobnikSDK } from '@map-colonies/jobnik-sdk';
+import { AppError, type LogContext, type Record3D } from '@map-colonies/3d-shared';
 import { IN_FLIGHT_JOB_STATUSES, SERVICES, STAGE_TYPES } from '@common/constants';
-import { is3tz } from '@common/util';
-import { AppError } from '@common/appError';
 import type { ConfigType, JobManagerConfig } from '@common/config';
-import type { LogContext } from '@common/interfaces';
-import type { IngestionPayload, JobResponse } from '../../record/models/recordManager';
-import type { Record3D } from '../catalog/interfaces';
+import { ARCHIVE_EXTENSION } from '../../extractor/constants';
+import type { JobResponse } from '../../record/models/recordManager';
+import type { IngestionJobInput } from './interfaces';
 
 interface StageDescriptor {
   type: string;
@@ -17,6 +17,8 @@ interface StageDescriptor {
   task?: Record<string, unknown>;
   only3tz?: boolean;
 }
+
+export const ERROR_JOBNIK_IN_FLIGHT_QUERY = 'failed querying Jobnik for in-flight jobs';
 
 @singleton()
 export class JobnikClient {
@@ -26,12 +28,12 @@ export class JobnikClient {
   private readonly jobManager: JobManagerConfig;
 
   public constructor(
-    @inject(SERVICES.CONFIG) private readonly config: ConfigType,
+    @inject(SERVICES.CONFIG) config: ConfigType,
     @inject(SERVICES.LOGGER) private readonly logger: Logger,
-    @inject(SERVICES.METRICS) private readonly metricsRegistry: Registry
+    @inject(SERVICES.METRICS) metricsRegistry: Registry
   ) {
-    this.jobManager = this.config.get('jobManager');
-    const sdk = new JobnikSDK({ baseUrl: this.jobManager.url, metricsRegistry: this.metricsRegistry });
+    this.jobManager = config.get('jobManager');
+    const sdk = new JobnikSDK({ baseUrl: this.jobManager.url, metricsRegistry });
     this.producer = sdk.getProducer();
     this.apiClient = sdk.getApiClient();
     this.logContext = {
@@ -50,8 +52,8 @@ export class JobnikClient {
         params: { query: { job_name: this.jobManager.ingestion.jobType, page, page_size: pageSize } },
       });
       if (error !== undefined) {
-        this.logger.error({ msg: 'failed querying Jobnik for in-flight jobs', logContext, productName, err: error });
-        throw new AppError('jobnik', StatusCodes.INTERNAL_SERVER_ERROR, 'failed querying Jobnik for in-flight jobs', false);
+        this.logger.error({ msg: ERROR_JOBNIK_IN_FLIGHT_QUERY, logContext, productName, err: error });
+        throw new AppError('jobnik', StatusCodes.INTERNAL_SERVER_ERROR, ERROR_JOBNIK_IN_FLIGHT_QUERY, false);
       }
 
       const jobs = data.items;
@@ -69,36 +71,24 @@ export class JobnikClient {
     }
   }
 
-  public async createIngestionJob(payload: IngestionPayload): Promise<JobResponse> {
+  public async createIngestionJob(input: IngestionJobInput): Promise<JobResponse> {
     const logContext = { ...this.logContext, function: this.createIngestionJob.name };
-    const isArchive = is3tz(payload.modelPath);
+    const { modelPath, metadata } = input;
+    const isArchive = extname(modelPath).toLowerCase() === ARCHIVE_EXTENSION;
 
     const job = await this.producer.createJob({
       name: this.jobManager.ingestion.jobType,
-      data: { modelPath: payload.modelPath, tilesetFilename: payload.tilesetFilename, metadata: payload.metadata },
+      data: { modelPath, metadata },
     });
 
     const stages: StageDescriptor[] = [
-      {
-        type: STAGE_TYPES.DATA_EXTRACTION,
-        data: { modelPath: payload.modelPath },
-        task: { modelPath: payload.modelPath, tilesetFilename: payload.tilesetFilename },
-        only3tz: true,
-      },
-      {
-        type: STAGE_TYPES.VALIDATION,
-        data: {},
-        task: { modelPath: payload.modelPath, tilesetFilename: payload.tilesetFilename, metadata: payload.metadata },
-      },
-      {
-        type: STAGE_TYPES.CREATE_UPLOAD_MODEL_TASKS,
-        data: {},
-        task: { modelPath: payload.modelPath, tilesetFilename: payload.tilesetFilename },
-      },
+      { type: STAGE_TYPES.DATA_EXTRACTION, data: { modelPath }, task: { modelPath }, only3tz: true },
+      { type: STAGE_TYPES.VALIDATION, data: {}, task: { modelPath, metadata } },
+      { type: STAGE_TYPES.CREATE_UPLOAD_MODEL_TASKS, data: {}, task: { modelPath } },
       { type: STAGE_TYPES.UPLOAD_MODEL_DATA, data: {} },
-      { type: STAGE_TYPES.CLEAR_DATA, data: { modelPath: payload.modelPath }, task: { modelPath: payload.modelPath }, only3tz: true },
-      { type: STAGE_TYPES.UPLOAD_MODEL_PARTS, data: {}, task: { metadata: payload.metadata } },
-      { type: STAGE_TYPES.INGESTION_FINALIZER, data: { metadata: payload.metadata }, task: { metadata: payload.metadata } },
+      { type: STAGE_TYPES.CLEAR_DATA, data: { modelPath }, task: { modelPath }, only3tz: true },
+      { type: STAGE_TYPES.UPLOAD_MODEL_PARTS, data: {}, task: { metadata } },
+      { type: STAGE_TYPES.INGESTION_FINALIZER, data: { metadata }, task: { metadata } },
     ];
 
     for (const descriptor of stages) {

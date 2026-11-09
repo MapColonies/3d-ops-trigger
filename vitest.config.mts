@@ -13,6 +13,11 @@ const pathAlias = Object.fromEntries(
   ])
 );
 
+const dependencyAlias = {
+  '@map-colonies/shapefile-reader': path.resolve(__dirname, 'node_modules/@map-colonies/shapefile-reader/dist/index.js'),
+  '@map-colonies/3d-shared': path.resolve(__dirname, 'node_modules/@map-colonies/3d-shared/dist/index.js'),
+};
+
 export default defineConfig({
   test: {
     projects: [
@@ -24,7 +29,7 @@ export default defineConfig({
           environment: 'node',
         },
         resolve: {
-          alias: pathAlias,
+          alias: { ...pathAlias, ...dependencyAlias },
         },
       },
       {
@@ -35,7 +40,7 @@ export default defineConfig({
           environment: 'node',
         },
         resolve: {
-          alias: pathAlias,
+          alias: { ...pathAlias, ...dependencyAlias },
         },
       },
     ],

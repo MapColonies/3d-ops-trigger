@@ -13,5 +13,5 @@ metadata:
 spec:
   type: service
   lifecycle: production
-  owner: DevInfra
-  system: 3d
+  owner: 3D
+  system: 3d-ingestion

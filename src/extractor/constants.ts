@@ -1,0 +1,13 @@
+export const ERROR_METADATA_NO_FEATURES = 'ShapeMetadata shapefile must contain at least one feature';
+export const ERROR_METADATA_NO_ATTRIBUTES = 'ShapeMetadata shapefile first row has no attributes';
+export const ERROR_PRODUCT_SINGLE_FEATURE = 'product shapefile must contain a single feature';
+export const ERROR_PRODUCT_GEOMETRY = 'product shapefile feature must be a Polygon or MultiPolygon';
+export const SHAPEFILE_NO_FEATURES_MESSAGE = 'has no valid features or vertices';
+export const TILESET_FILENAME = 'tileset.json';
+export const ARCHIVE_EXTENSION = '.3tz';
+export const ERROR_TILESET_INVALID = 'tileset json is not a valid 3D Tiles tileset (missing asset/root/boundingVolume)';
+export const ERROR_3TZ_INVALID = '.3tz file is not a valid zip archive';
+export const ERROR_3TZ_INVALID_PREFIX = '.3tz archive is invalid';
+export const ERROR_TILESET_NOT_IN_ARCHIVE = `.3tz archive must contain ${TILESET_FILENAME} at its root`;
+export const ERROR_FOOTPRINT_FAR_FROM_MODEL = "Wrong footprint! footprint's coordinates are not even close to the model";
+export const ERROR_FOOTPRINT_COVERAGE_FAILED = 'failed to calculate the footprint coverage of the model';

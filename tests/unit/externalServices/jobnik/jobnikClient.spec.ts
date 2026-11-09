@@ -1,10 +1,11 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { jsLogger } from '@map-colonies/js-logger';
 import { Registry } from 'prom-client';
+import type { Record3D } from '@map-colonies/3d-shared';
 import { JobnikClient } from '@src/externalServices/jobnik/jobnikClient';
 import { STAGE_TYPES } from '@src/common/constants';
 import type { ConfigType } from '@src/common/config';
-import type { IngestionPayload } from '@src/record/models/recordManager';
+import type { IngestionJobInput } from '@src/externalServices/jobnik/interfaces';
 
 const jobManagerConfig = {
   url: 'http://job-manager',
@@ -37,9 +38,8 @@ vi.mock('@map-colonies/jobnik-sdk', () => ({
 
 const configStub = { get: (): unknown => jobManagerConfig } as unknown as ConfigType;
 
-const buildPayload = (modelPath: string): IngestionPayload => ({
+const buildInput = (modelPath: string): IngestionJobInput => ({
   modelPath,
-  tilesetFilename: 'tileset.json',
   metadata: { productName: 'afula' },
 });
 
@@ -55,14 +55,14 @@ describe('JobnikClient', function () {
     client = new JobnikClient(configStub, await jsLogger({ enabled: false }), new Registry());
   });
 
-  it('should create the ingestion job and a validation stage for a folder input', async function () {
-    const result = await client.createIngestionJob(buildPayload('/shared/models/afula'));
+  it('should create the ingestion job and a validation stage for a tileset.json input', async function () {
+    const result = await client.createIngestionJob(buildInput('\\\\domtest\\models\\afula\\data\\tileset.json'));
 
     expect(producerMock.createJob).toHaveBeenCalledWith(expect.objectContaining({ name: jobManagerConfig.ingestion.jobType }));
 
-    const folderStageTypes = (producerMock.createStage.mock.calls as [string, { type: string }][]).map((call) => call[1].type);
+    const stageTypes = (producerMock.createStage.mock.calls as [string, { type: string }][]).map((call) => call[1].type);
 
-    expect(folderStageTypes).toEqual([
+    expect(stageTypes).toEqual([
       STAGE_TYPES.VALIDATION,
       STAGE_TYPES.CREATE_UPLOAD_MODEL_TASKS,
       STAGE_TYPES.UPLOAD_MODEL_DATA,
@@ -79,7 +79,7 @@ describe('JobnikClient', function () {
   });
 
   it('should also create the data-extraction and clear-data stages for a 3tz input', async function () {
-    await client.createIngestionJob(buildPayload('/shared/models/afula.3tz'));
+    await client.createIngestionJob(buildInput('\\\\domtest\\models\\afula\\data\\model.3tz'));
 
     const stageTypes = (producerMock.createStage.mock.calls as [string, { type: string }][]).map((call) => call[1].type);
 
@@ -95,9 +95,21 @@ describe('JobnikClient', function () {
   });
 
   it('should create a delete job with the record details', async function () {
-    const result = await client.createDeleteJob({ id: 'rec-1', productId: 'p-1', productName: 'afula', productType: '3DPhotoRealistic' });
+    const record = {
+      id: 'rec-1',
+      productId: 'p-1',
+      productVersion: 1,
+      productName: 'afula',
+      productType: '3DPhotoRealistic',
+      producerName: 'IDFMU',
+    } as unknown as Record3D;
 
-    expect(producerMock.createJob).toHaveBeenCalledWith(expect.objectContaining({ name: jobManagerConfig.delete.jobType }));
+    const result = await client.createDeleteJob(record);
+
+    expect(producerMock.createJob).toHaveBeenCalledWith({
+      name: jobManagerConfig.delete.jobType,
+      data: { modelId: 'rec-1', productId: 'p-1', productVersion: 1, productName: 'afula', productType: '3DPhotoRealistic', producerName: 'IDFMU' },
+    });
     expect(result).toEqual({ jobId: 'job-1', status: 'PENDING' });
   });
 

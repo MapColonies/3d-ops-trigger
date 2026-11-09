@@ -7,8 +7,6 @@ export const DEFAULT_SERVER_PORT = 80;
 export const IGNORED_OUTGOING_TRACE_ROUTES = [/^.*\/v1\/metrics.*$/];
 export const IGNORED_INCOMING_TRACE_ROUTES = [/^.*\/docs.*$/];
 
-export const DOMAIN = '3D';
-
 /* eslint-disable @typescript-eslint/naming-convention */
 export const STAGE_TYPES = {
   DATA_EXTRACTION: 'data-extraction',
@@ -29,6 +27,5 @@ export const SERVICES = {
   CONFIG: Symbol('Config'),
   TRACER: Symbol('Tracer'),
   METRICS: Symbol('METRICS'),
-  PROVIDER: Symbol('Provider'),
 } satisfies Record<string, symbol>;
 /* eslint-enable @typescript-eslint/naming-convention */

@@ -1,64 +1,66 @@
 import { jsLogger } from '@map-colonies/js-logger';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { StatusCodes } from 'http-status-codes';
+import { AppError } from '@map-colonies/3d-shared';
+import type { IFindRecordsPayload } from '@map-colonies/3d-shared';
+import { bboxPolygon } from '@turf/turf';
 import {
   ValidationManager,
-  ERROR_METADATA_DATE,
-  ERROR_METADATA_FOOTPRINT,
-  ERROR_METADATA_MISSING_DATE,
-  ERROR_METADATA_INVALID_DATE,
-  ERROR_DELETE_RECORD_NOT_FOUND,
   ERROR_DELETE_PRODUCT_TYPE,
+  ERROR_DELETE_RECORD_NOT_FOUND,
   ERROR_DELETE_STATUS,
-  ERROR_FILE_NOT_FOUND,
+  ERROR_METADATA_PRODUCT_ID_UNIQUE,
+  ERROR_METADATA_PRODUCT_NAME_UNIQUE,
   ERROR_PRODUCT_NAME_IN_FLIGHT,
 } from '@src/validator/validationManager';
-import { AppError } from '@src/common/appError';
-import type { LookupTablesCall } from '@src/externalServices/lookupTables/lookupTablesCall';
-import type { CatalogCall } from '@src/externalServices/catalog/catalogCall';
+import type { LookupTablesClient } from '@src/externalServices/lookupTables/lookupTablesClient';
+import type { CatalogClient } from '@src/externalServices/catalog/catalogClient';
 import type { JobnikClient } from '@src/externalServices/jobnik/jobnikClient';
-import type { Provider } from '@src/providers/interfaces';
-import type { IngestionPayload } from '@src/record/models/recordManager';
-import { buildValidMetadata } from '@tests/helpers/metadata';
+import type { ConfigType } from '@src/common/config';
+import { ERROR_FOOTPRINT_COVERAGE_FAILED, ERROR_FOOTPRINT_FAR_FROM_MODEL } from '@src/extractor/constants';
+import { buildValidPayload, buildProductIdentity } from '@tests/helpers/metadata';
 
-const lookupStub = { getClassifications: vi.fn().mockResolvedValue(['abc123']) } as unknown as LookupTablesCall;
+const lookupStub = {
+  getClassifications: vi.fn().mockResolvedValue(['abc123']),
+  getCountries: vi.fn().mockResolvedValue(['France', 'USA']),
+} as unknown as LookupTablesClient;
 
-const ingest = (metadata: Record<string, unknown>): IngestionPayload => ({
-  modelPath: '/shared/models/afula',
-  tilesetFilename: 'tileset.json',
-  metadata,
-});
+const product = buildProductIdentity();
+const INTERSECTION_PERCENTAGE_LIMIT = 10;
+const configStub = { get: vi.fn().mockReturnValue(INTERSECTION_PERCENTAGE_LIMIT) } as unknown as ConfigType;
+const modelPolygon = bboxPolygon([2.33, 48.85, 2.35, 48.87]).geometry;
 
 describe('ValidationManager', function () {
   let validator: ValidationManager;
-  let catalogStub: CatalogCall;
-  let jobnikStub: JobnikClient;
-  let providerStub: Provider;
+  let catalogStub: CatalogClient;
+  let findRecords: ReturnType<typeof vi.fn<(payload: IFindRecordsPayload) => Promise<unknown[]>>>;
+  let hasInFlightIngestionJob: ReturnType<typeof vi.fn<(productName: string) => Promise<boolean>>>;
 
   beforeEach(async function () {
-    catalogStub = { findRecords: vi.fn().mockResolvedValue([]) } as unknown as CatalogCall;
-    jobnikStub = { hasInFlightIngestionJob: vi.fn().mockResolvedValue(false) } as unknown as JobnikClient;
-    providerStub = { fileExists: vi.fn().mockResolvedValue(true) };
-    validator = new ValidationManager(await jsLogger({ enabled: false }), lookupStub, catalogStub, jobnikStub, providerStub);
+    findRecords = vi.fn<(payload: IFindRecordsPayload) => Promise<unknown[]>>().mockResolvedValue([]);
+    catalogStub = { findRecords } as unknown as CatalogClient;
+    hasInFlightIngestionJob = vi.fn<(productName: string) => Promise<boolean>>().mockResolvedValue(false);
+    const jobnikStub = { hasInFlightIngestionJob } as unknown as JobnikClient;
+    validator = new ValidationManager(configStub, await jsLogger({ enabled: false }), lookupStub, catalogStub, jobnikStub);
   });
 
-  it('should pass a fully valid ingestion payload', async function () {
-    await expect(validator.validateIngestion(ingest(buildValidMetadata()))).resolves.toBeUndefined();
+  it('should pass fully valid form fields and a unique product', async function () {
+    await expect(validator.validateIngestion(buildValidPayload(), product)).resolves.toBeUndefined();
   });
 
-  it('should throw 400 when a required core field is missing', async function () {
-    const metadata = buildValidMetadata();
-    delete metadata.productName;
+  it('should throw 400 when a required form field is missing', async function () {
+    const metadata = buildValidPayload();
+    delete metadata.classification;
 
-    await expect(validator.validateIngestion(ingest(metadata))).rejects.toThrow(AppError);
+    await expect(validator.validateIngestion(metadata, product)).rejects.toThrow(AppError);
   });
 
   it('should throw 400 for an invalid productType', async function () {
-    const metadata = { ...buildValidMetadata(), productType: 'NOT_A_3D_TYPE' };
+    const metadata = { ...buildValidPayload(), productType: 'NOT_A_3D_TYPE' };
 
     let thrown: unknown;
     try {
-      await validator.validateIngestion(ingest(metadata));
+      await validator.validateIngestion(metadata, product);
     } catch (err) {
       thrown = err;
     }
@@ -67,92 +69,130 @@ describe('ValidationManager', function () {
     expect((thrown as AppError).status).toBe(StatusCodes.BAD_REQUEST);
   });
 
-  it('should throw the footprint error for a malformed geometry', async function () {
-    const metadata = { ...buildValidMetadata(), footprint: { type: 'Point', coordinates: [34.45, 31.48] } };
-
-    await expect(validator.validateIngestion(ingest(metadata))).rejects.toThrow(ERROR_METADATA_FOOTPRINT);
-  });
-
-  it('should throw the date error when imagingTimeBeginUTC is after imagingTimeEndUTC', async function () {
-    const metadata = { ...buildValidMetadata(), imagingTimeBeginUTC: '2025-07-11T00:00:00.000Z' };
-
-    await expect(validator.validateIngestion(ingest(metadata))).rejects.toThrow(ERROR_METADATA_DATE);
-  });
-
-  it('should throw the missing-date error when a source date is absent', async function () {
-    const metadata = buildValidMetadata();
-    delete metadata.imagingTimeEndUTC;
-
-    await expect(validator.validateIngestion(ingest(metadata))).rejects.toThrow(ERROR_METADATA_MISSING_DATE);
-  });
-
-  it('should throw the invalid-date error for an unparseable date', async function () {
-    const metadata = { ...buildValidMetadata(), imagingTimeBeginUTC: 'not-a-date' };
-
-    await expect(validator.validateIngestion(ingest(metadata))).rejects.toThrow(ERROR_METADATA_INVALID_DATE);
-  });
-
   it('should throw 400 when the classification is not in the lookup table', async function () {
-    const metadata = { ...buildValidMetadata(), classification: 'not-a-real-classification' };
+    const metadata = { ...buildValidPayload(), classification: 'not-a-real-classification' };
 
-    await expect(validator.validateIngestion(ingest(metadata))).rejects.toThrow(AppError);
+    await expect(validator.validateIngestion(metadata, product)).rejects.toThrow(AppError);
+  });
+
+  it('should throw 400 listing the regions that are not in the countries lookup table', async function () {
+    const metadata = { ...buildValidPayload(), region: ['France', 'Atlantis', 'Mordor'] };
+
+    await expect(validator.validateIngestion(metadata, product)).rejects.toThrow('region contains invalid values: Atlantis,Mordor');
+  });
+
+  it('should throw 400 when the product id already exists in the catalog', async function () {
+    findRecords.mockImplementation(async (payload) => Promise.resolve(payload.productId !== undefined ? [{ id: 'existing', productId: 'p-1' }] : []));
+
+    await expect(validator.validateIngestion(buildValidPayload(), product)).rejects.toThrow(ERROR_METADATA_PRODUCT_ID_UNIQUE);
   });
 
   it('should throw 400 when the product name already exists in the catalog', async function () {
-    (catalogStub.findRecords as ReturnType<typeof vi.fn>).mockResolvedValueOnce([{ id: 'existing', productName: 'afula' }]);
+    findRecords.mockImplementation(async (payload) =>
+      Promise.resolve(payload.productName !== undefined ? [{ id: 'existing', productName: 'paris' }] : [])
+    );
 
-    await expect(validator.validateIngestion(ingest(buildValidMetadata()))).rejects.toThrow(AppError);
+    await expect(validator.validateIngestion(buildValidPayload(), product)).rejects.toThrow(ERROR_METADATA_PRODUCT_NAME_UNIQUE);
   });
 
-  it('should throw 409 when the product name has an in-flight ingestion job', async function () {
-    (jobnikStub.hasInFlightIngestionJob as ReturnType<typeof vi.fn>).mockResolvedValueOnce(true);
+  it('should query the catalog by product id and by product name', async function () {
+    await validator.validateIngestion(buildValidPayload(), product);
+
+    expect(findRecords).toHaveBeenCalledWith({ productId: 'p-1' });
+    expect(findRecords).toHaveBeenCalledWith({ productName: 'paris' });
+  });
+
+  it('should throw 409 when the product name already has an in-flight ingestion job', async function () {
+    hasInFlightIngestionJob.mockResolvedValue(true);
 
     let thrown: unknown;
     try {
-      await validator.validateIngestion(ingest(buildValidMetadata()));
+      await validator.validateIngestion(buildValidPayload(), product);
     } catch (err) {
       thrown = err;
     }
 
+    expect(hasInFlightIngestionJob).toHaveBeenCalledWith('paris');
     expect(thrown).toBeInstanceOf(AppError);
     expect((thrown as AppError).status).toBe(StatusCodes.CONFLICT);
     expect((thrown as AppError).message).toBe(ERROR_PRODUCT_NAME_IN_FLIGHT);
   });
 
-  it('should throw 400 when the model files do not exist', async function () {
-    (providerStub.fileExists as ReturnType<typeof vi.fn>).mockResolvedValueOnce(false);
-
-    await expect(validator.validateIngestion(ingest(buildValidMetadata()))).rejects.toThrow(ERROR_FILE_NOT_FOUND);
-  });
-
   describe('validateDelete', function () {
-    it('should return the record when it is deletable', async function () {
-      const record = { id: 'rec-1', productType: '3DPhotoRealistic', productStatus: 'UNPUBLISHED' };
-      (catalogStub.findRecords as ReturnType<typeof vi.fn>).mockResolvedValueOnce([record]);
+    const record = { id: 'rec-1', productType: '3DPhotoRealistic', productStatus: 'UNPUBLISHED' };
+
+    it('should return the record when it can be deleted', async function () {
+      findRecords.mockResolvedValue([record]);
 
       await expect(validator.validateDelete('rec-1')).resolves.toEqual(record);
+      expect(findRecords).toHaveBeenCalledWith({ id: 'rec-1' });
     });
 
-    it('should throw when the record is not found', async function () {
-      (catalogStub.findRecords as ReturnType<typeof vi.fn>).mockResolvedValueOnce([]);
+    it.each([
+      ['no record matches', []],
+      ['more than one record matches', [record, { ...record, id: 'rec-2' }]],
+    ])('should throw 400 when %s', async function (_case, records) {
+      findRecords.mockResolvedValue(records);
 
-      await expect(validator.validateDelete('missing')).rejects.toThrow(ERROR_DELETE_RECORD_NOT_FOUND);
+      await expect(validator.validateDelete('rec-1')).rejects.toThrow(ERROR_DELETE_RECORD_NOT_FOUND);
     });
 
-    it('should throw when the productType is blocked', async function () {
-      (catalogStub.findRecords as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
-        { id: 'rec-1', productType: 'QuantizedMeshDTMBest', productStatus: 'UNPUBLISHED' },
-      ]);
+    it('should throw 400 for a QuantizedMeshDTMBest record', async function () {
+      findRecords.mockResolvedValue([{ ...record, productType: 'QuantizedMeshDTMBest' }]);
 
       await expect(validator.validateDelete('rec-1')).rejects.toThrow(ERROR_DELETE_PRODUCT_TYPE);
     });
 
-    it('should throw when the record is not unpublished', async function () {
-      (catalogStub.findRecords as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
-        { id: 'rec-1', productType: '3DPhotoRealistic', productStatus: 'PUBLISHED' },
-      ]);
+    it('should throw 400 for a published record', async function () {
+      findRecords.mockResolvedValue([{ ...record, productStatus: 'PUBLISHED' }]);
 
       await expect(validator.validateDelete('rec-1')).rejects.toThrow(ERROR_DELETE_STATUS);
+    });
+  });
+
+  describe('validateFootprint', function () {
+    it.each([
+      ['equal to the model', [2.33, 48.85, 2.35, 48.87]],
+      ['covering a part of the model', [2.33, 48.85, 2.34, 48.87]],
+      ['bigger than the model', [2.32, 48.84, 2.36, 48.88]],
+    ])('should accept a footprint %s', function (_case, box) {
+      expect(() => validator.validateFootprint(bboxPolygon(box as [number, number, number, number]).geometry, modelPolygon)).not.toThrow();
+    });
+
+    it('should accept a multipolygon footprint', function () {
+      const footprint = { type: 'MultiPolygon' as const, coordinates: [bboxPolygon([2.33, 48.85, 2.35, 48.87]).geometry.coordinates] };
+
+      expect(() => validator.validateFootprint(footprint, modelPolygon)).not.toThrow();
+    });
+
+    it('should throw 400 when the footprint does not intersect the model', function () {
+      const footprint = bboxPolygon([10, 10, 10.01, 10.01]).geometry;
+
+      expect(() => validator.validateFootprint(footprint, modelPolygon)).toThrow(ERROR_FOOTPRINT_FAR_FROM_MODEL);
+    });
+
+    it('should throw 400 when the footprint coverage of the model is below the limit', function () {
+      const footprint = bboxPolygon([2.33, 48.85, 2.332, 48.852]).geometry;
+
+      expect(() => validator.validateFootprint(footprint, modelPolygon)).toThrow(
+        `footprint coverage of the model is 1%, the minimum required coverage is ${INTERSECTION_PERCENTAGE_LIMIT}%`
+      );
+    });
+
+    it('should throw 400 when the coverage cannot be calculated', function () {
+      const footprint = {
+        type: 'Polygon' as const,
+        coordinates: [
+          [
+            [Number.NaN, 48.85],
+            [2.34, 48.86],
+            [2.34, 48.85],
+            [Number.NaN, 48.85],
+          ],
+        ],
+      };
+
+      expect(() => validator.validateFootprint(footprint, modelPolygon)).toThrow(ERROR_FOOTPRINT_COVERAGE_FAILED);
     });
   });
 });

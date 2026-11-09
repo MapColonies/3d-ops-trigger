@@ -1,9 +1,14 @@
 import type { Logger } from '@map-colonies/js-logger';
 import { inject, injectable } from 'tsyringe';
+import type { LogContext } from '@map-colonies/3d-shared';
 import type { components } from '@openapi';
 import { SERVICES } from '@common/constants';
-import type { LogContext } from '@common/interfaces';
 import { ValidationManager } from '../../validator/validationManager';
+import { FilesValidator } from '../../validator/filesValidator';
+import { TilesetValidator } from '../../validator/tilesetValidator';
+import { MetadataExtractor } from '../../extractor/metadataExtractor';
+import { ProductReader } from '../../extractor/productReader';
+import { TilesetReader } from '../../extractor/tilesetReader';
 import { JobnikClient } from '../../externalServices/jobnik/jobnikClient';
 
 export type IngestionPayload = components['schemas']['ingestionPayload'];
@@ -19,7 +24,12 @@ export class RecordManager {
   public constructor(
     @inject(SERVICES.LOGGER) private readonly logger: Logger,
     @inject(ValidationManager) private readonly validator: ValidationManager,
-    @inject(JobnikClient) private readonly jobnik: JobnikClient
+    @inject(FilesValidator) private readonly filesValidator: FilesValidator,
+    @inject(MetadataExtractor) private readonly metadataExtractor: MetadataExtractor,
+    @inject(ProductReader) private readonly productReader: ProductReader,
+    @inject(TilesetReader) private readonly tilesetReader: TilesetReader,
+    @inject(TilesetValidator) private readonly tilesetValidator: TilesetValidator,
+    @inject(JobnikClient) private readonly jobnikClient: JobnikClient
   ) {
     this.logContext = {
       fileName: __filename,
@@ -29,16 +39,31 @@ export class RecordManager {
 
   public async createIngestion(payload: IngestionPayload): Promise<JobResponse> {
     const logContext = { ...this.logContext, function: this.createIngestion.name };
-    this.logger.info({ msg: 'creating ingestion job', logContext, modelPath: payload.modelPath, tilesetFilename: payload.tilesetFilename });
-    await this.validator.validateIngestion(payload);
-    return this.jobnik.createIngestionJob(payload);
+    this.logger.info({ msg: 'creating ingestion job', logContext, modelPath: payload.modelPath });
+    const files = await this.filesValidator.validateIngestionFiles(payload);
+    await this.tilesetValidator.validate(files.modelPath);
+
+    const [footprint, modelPolygon, metadata] = await Promise.all([
+      this.productReader.read(files.product.shp),
+      this.tilesetReader.readModelPolygon(files.modelPath),
+      this.metadataExtractor.extract(files),
+    ]);
+
+    this.validator.validateFootprint(footprint, modelPolygon);
+    await this.validator.validateIngestion(payload, metadata);
+
+    const { modelPath, productShapefilePath, metadataShapefilePath, ...requestMetadata } = payload;
+    return this.jobnikClient.createIngestionJob({
+      modelPath,
+      metadata: { ...requestMetadata, ...metadata, footprint },
+    });
   }
 
   public async deleteRecord(id: string): Promise<JobResponse> {
     const logContext = { ...this.logContext, function: this.deleteRecord.name };
     this.logger.info({ msg: 'creating delete job', logContext, recordId: id });
     const record = await this.validator.validateDelete(id);
-    return this.jobnik.createDeleteJob(record);
+    return this.jobnikClient.createDeleteJob(record);
   }
 
   public updateMetadata(id: string, update: UpdatePayload): AckResponse {

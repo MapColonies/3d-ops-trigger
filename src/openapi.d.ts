@@ -70,14 +70,35 @@ export type components = {
       message: string;
     };
     ingestionPayload: {
-      /** @description Path on the shared storage to the 3DTiles folder or 3TZ archive */
+      /**
+       * @description Full share path (must start with the configured base path) to the model inside the data/ folder - a tileset.json (3D Tiles) or a .3tz file (3D Tiles Archive - tileset.json at its root). The model bounding volume (region or sphere) must be covered by the product footprint above the configured intersection percentage
+       * @example \\domtest\models\paris\data\tileset.json
+       */
       modelPath: string;
-      /** @description The tileset entry name (e.g. tileset.json) */
-      tilesetFilename: string;
-      /** @description 3D record metadata (business validation applied downstream) */
-      metadata: {
-        [key: string]: unknown;
-      };
+      /**
+       * @description Full share path (must start with the configured base path) to the footprint shapefile (shape/Product.shp). .shx, .dbf, .prj (WGS84) and .cpg (UTF-8) must sit next to it
+       * @example \\domtest\models\paris\shape\Product.shp
+       */
+      productShapefilePath: string;
+      /**
+       * @description Full share path (must start with the configured base path) to the parts metadata shapefile (shape/ShapeMetadata.shp). .shx, .dbf, .prj (WGS84) and .cpg (UTF-8) must sit next to it
+       * @example \\domtest\models\paris\shape\ShapeMetadata.shp
+       */
+      metadataShapefilePath: string;
+      /** @enum {string} */
+      productType:
+        | '3DPhotoRealistic'
+        | '3DPhotoRealisticBest'
+        | '3DSemantic'
+        | '3DSemanticMesh'
+        | 'QuantizedMeshDTMBest'
+        | 'QuantizedMeshDSMBest'
+        | '3DPointCloud';
+      productSubType?: string;
+      description?: string;
+      region: string[];
+      classification: string;
+      keywords?: string;
     };
     /** @description Partial metadata fields to update */
     updatePayload: {
@@ -137,6 +158,24 @@ export interface operations {
           'application/json': components['schemas']['error'];
         };
       };
+      /** @description An ingestion job for this product name is already in flight */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['error'];
+        };
+      };
+      /** @description An external service (lookup-tables / catalog / Jobnik) failed */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['error'];
+        };
+      };
     };
   };
   deleteRecord: {
@@ -171,6 +210,15 @@ export interface operations {
       };
       /** @description Record not found */
       404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['error'];
+        };
+      };
+      /** @description An external service (catalog / Jobnik) failed */
+      500: {
         headers: {
           [name: string]: unknown;
         };

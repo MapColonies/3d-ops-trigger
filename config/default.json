@@ -34,11 +34,22 @@
     }
   },
   "externalServices": {
-    "catalog": "http://127.0.0.1:8080",
+    "catalogUrl": "http://127.0.0.1:8080",
+    "extractableUrl": "http://127.0.0.1:8080",
     "lookupTables": {
       "url": "http://127.0.0.1:8080",
       "subUrl": "lookup-tables/lookupData"
     }
+  },
+  "productReader": {
+    "maxVerticesPerChunk": 10000
+  },
+  "validation": {
+    "intersectionPercentageLimit": 10
+  },
+  "paths": {
+    "basePath": "\\\\domtest\\mimi\\archi\\maz\\silver\\libot",
+    "pvPath": "/home/3DModels"
   },
   "jobManager": {
     "url": "http://127.0.0.1:8080",
@@ -51,19 +62,5 @@
       "jobType": "Delete_3D",
       "taskType": "deleteModel"
     }
-  },
-  "provider": "NFS",
-  "NFS": {
-    "pvPath": "/app/models"
-  },
-  "S3": {
-    "accessKeyId": "minio",
-    "secretAccessKey": "minio",
-    "endpointUrl": "http://127.0.0.1:9000",
-    "bucket": "3dtiles",
-    "region": "us-east-1",
-    "forcePathStyle": true,
-    "sslEnabled": false,
-    "maxAttempts": 3
   }
 }
