@@ -9,6 +9,7 @@ import { TilesetValidator } from '../../validator/tilesetValidator';
 import { MetadataExtractor } from '../../extractor/metadataExtractor';
 import { ProductReader } from '../../extractor/productReader';
 import { TilesetReader } from '../../extractor/tilesetReader';
+import { JobnikClient } from '../../externalServices/jobnik/jobnikClient';
 
 export type IngestionPayload = components['schemas']['ingestionPayload'];
 export type UpdatePayload = components['schemas']['updatePayload'];
@@ -27,7 +28,8 @@ export class RecordManager {
     @inject(MetadataExtractor) private readonly metadataExtractor: MetadataExtractor,
     @inject(ProductReader) private readonly productReader: ProductReader,
     @inject(TilesetReader) private readonly tilesetReader: TilesetReader,
-    @inject(TilesetValidator) private readonly tilesetValidator: TilesetValidator
+    @inject(TilesetValidator) private readonly tilesetValidator: TilesetValidator,
+    @inject(JobnikClient) private readonly jobnikClient: JobnikClient
   ) {
     this.logContext = {
       fileName: __filename,
@@ -49,13 +51,19 @@ export class RecordManager {
 
     this.validator.validateFootprint(footprint, modelPolygon);
     await this.validator.validateIngestion(payload, metadata);
-    return { jobId: 'stub-ingestion-job-id', status: 'PENDING' };
+
+    const { modelPath, productShapefilePath, metadataShapefilePath, ...requestMetadata } = payload;
+    return this.jobnikClient.createIngestionJob({
+      modelPath,
+      metadata: { ...requestMetadata, ...metadata, footprint },
+    });
   }
 
-  public deleteRecord(id: string): JobResponse {
+  public async deleteRecord(id: string): Promise<JobResponse> {
     const logContext = { ...this.logContext, function: this.deleteRecord.name };
     this.logger.info({ msg: 'creating delete job', logContext, recordId: id });
-    return { jobId: 'stub-delete-job-id', status: 'PENDING' };
+    const record = await this.validator.validateDelete(id);
+    return this.jobnikClient.createDeleteJob(record);
   }
 
   public updateMetadata(id: string, update: UpdatePayload): AckResponse {

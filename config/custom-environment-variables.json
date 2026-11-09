@@ -22,5 +22,20 @@
   "paths": {
     "basePath": "BASE_PATH",
     "pvPath": "PV_SOURCE_PATH"
+  },
+  "jobManager": {
+    "url": "JOB_MANAGER_URL",
+    "ingestion": {
+      "jobType": "JOB_INGESTION_TYPE",
+      "taskType": "TASK_INGESTION_TYPE",
+      "batches": {
+        "__name": "INGESTION_TASK_BATCHES",
+        "__format": "number"
+      }
+    },
+    "delete": {
+      "jobType": "JOB_DELETE_TYPE",
+      "taskType": "TASK_DELETE_TYPE"
+    }
   }
 }

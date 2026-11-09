@@ -4,9 +4,18 @@ import { StatusCodes } from 'http-status-codes';
 import { AppError } from '@map-colonies/3d-shared';
 import type { IFindRecordsPayload } from '@map-colonies/3d-shared';
 import { bboxPolygon } from '@turf/turf';
-import { ValidationManager, ERROR_METADATA_PRODUCT_ID_UNIQUE, ERROR_METADATA_PRODUCT_NAME_UNIQUE } from '@src/validator/validationManager';
+import {
+  ValidationManager,
+  ERROR_DELETE_PRODUCT_TYPE,
+  ERROR_DELETE_RECORD_NOT_FOUND,
+  ERROR_DELETE_STATUS,
+  ERROR_METADATA_PRODUCT_ID_UNIQUE,
+  ERROR_METADATA_PRODUCT_NAME_UNIQUE,
+  ERROR_PRODUCT_NAME_IN_FLIGHT,
+} from '@src/validator/validationManager';
 import type { LookupTablesClient } from '@src/externalServices/lookupTables/lookupTablesClient';
 import type { CatalogClient } from '@src/externalServices/catalog/catalogClient';
+import type { JobnikClient } from '@src/externalServices/jobnik/jobnikClient';
 import type { ConfigType } from '@src/common/config';
 import { ERROR_FOOTPRINT_COVERAGE_FAILED, ERROR_FOOTPRINT_FAR_FROM_MODEL } from '@src/extractor/constants';
 import { buildValidPayload, buildProductIdentity } from '@tests/helpers/metadata';
@@ -25,11 +34,14 @@ describe('ValidationManager', function () {
   let validator: ValidationManager;
   let catalogStub: CatalogClient;
   let findRecords: ReturnType<typeof vi.fn<(payload: IFindRecordsPayload) => Promise<unknown[]>>>;
+  let hasInFlightIngestionJob: ReturnType<typeof vi.fn<(productName: string) => Promise<boolean>>>;
 
   beforeEach(async function () {
     findRecords = vi.fn<(payload: IFindRecordsPayload) => Promise<unknown[]>>().mockResolvedValue([]);
     catalogStub = { findRecords } as unknown as CatalogClient;
-    validator = new ValidationManager(configStub, await jsLogger({ enabled: false }), lookupStub, catalogStub);
+    hasInFlightIngestionJob = vi.fn<(productName: string) => Promise<boolean>>().mockResolvedValue(false);
+    const jobnikStub = { hasInFlightIngestionJob } as unknown as JobnikClient;
+    validator = new ValidationManager(configStub, await jsLogger({ enabled: false }), lookupStub, catalogStub, jobnikStub);
   });
 
   it('should pass fully valid form fields and a unique product', async function () {
@@ -88,6 +100,54 @@ describe('ValidationManager', function () {
 
     expect(findRecords).toHaveBeenCalledWith({ productId: 'p-1' });
     expect(findRecords).toHaveBeenCalledWith({ productName: 'paris' });
+  });
+
+  it('should throw 409 when the product name already has an in-flight ingestion job', async function () {
+    hasInFlightIngestionJob.mockResolvedValue(true);
+
+    let thrown: unknown;
+    try {
+      await validator.validateIngestion(buildValidPayload(), product);
+    } catch (err) {
+      thrown = err;
+    }
+
+    expect(hasInFlightIngestionJob).toHaveBeenCalledWith('paris');
+    expect(thrown).toBeInstanceOf(AppError);
+    expect((thrown as AppError).status).toBe(StatusCodes.CONFLICT);
+    expect((thrown as AppError).message).toBe(ERROR_PRODUCT_NAME_IN_FLIGHT);
+  });
+
+  describe('validateDelete', function () {
+    const record = { id: 'rec-1', productType: '3DPhotoRealistic', productStatus: 'UNPUBLISHED' };
+
+    it('should return the record when it can be deleted', async function () {
+      findRecords.mockResolvedValue([record]);
+
+      await expect(validator.validateDelete('rec-1')).resolves.toEqual(record);
+      expect(findRecords).toHaveBeenCalledWith({ id: 'rec-1' });
+    });
+
+    it.each([
+      ['no record matches', []],
+      ['more than one record matches', [record, { ...record, id: 'rec-2' }]],
+    ])('should throw 400 when %s', async function (_case, records) {
+      findRecords.mockResolvedValue(records);
+
+      await expect(validator.validateDelete('rec-1')).rejects.toThrow(ERROR_DELETE_RECORD_NOT_FOUND);
+    });
+
+    it('should throw 400 for a QuantizedMeshDTMBest record', async function () {
+      findRecords.mockResolvedValue([{ ...record, productType: 'QuantizedMeshDTMBest' }]);
+
+      await expect(validator.validateDelete('rec-1')).rejects.toThrow(ERROR_DELETE_PRODUCT_TYPE);
+    });
+
+    it('should throw 400 for a published record', async function () {
+      findRecords.mockResolvedValue([{ ...record, productStatus: 'PUBLISHED' }]);
+
+      await expect(validator.validateDelete('rec-1')).rejects.toThrow(ERROR_DELETE_STATUS);
+    });
   });
 
   describe('validateFootprint', function () {

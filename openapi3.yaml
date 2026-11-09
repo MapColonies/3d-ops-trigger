@@ -33,8 +33,14 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/error'
+        409:
+          description: An ingestion job for this product name is already in flight
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/error'
         500:
-          description: An external service (lookup-tables / catalog) failed
+          description: An external service (lookup-tables / catalog / Jobnik) failed
           content:
             application/json:
               schema:
@@ -63,6 +69,12 @@ paths:
                 $ref: '#/components/schemas/error'
         404:
           description: Record not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/error'
+        500:
+          description: An external service (catalog / Jobnik) failed
           content:
             application/json:
               schema:

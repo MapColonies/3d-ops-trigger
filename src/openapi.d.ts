@@ -158,7 +158,16 @@ export interface operations {
           'application/json': components['schemas']['error'];
         };
       };
-      /** @description An external service (lookup-tables / catalog) failed */
+      /** @description An ingestion job for this product name is already in flight */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['error'];
+        };
+      };
+      /** @description An external service (lookup-tables / catalog / Jobnik) failed */
       500: {
         headers: {
           [name: string]: unknown;
@@ -201,6 +210,15 @@ export interface operations {
       };
       /** @description Record not found */
       404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['error'];
+        };
+      };
+      /** @description An external service (catalog / Jobnik) failed */
+      500: {
         headers: {
           [name: string]: unknown;
         };

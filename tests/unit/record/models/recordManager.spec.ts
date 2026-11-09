@@ -7,10 +7,16 @@ import type { MetadataExtractor } from '@src/extractor/metadataExtractor';
 import type { ProductReader } from '@src/extractor/productReader';
 import type { TilesetReader } from '@src/extractor/tilesetReader';
 import type { TilesetValidator } from '@src/validator/tilesetValidator';
+import type { JobnikClient } from '@src/externalServices/jobnik/jobnikClient';
 
 describe('RecordManager', function () {
   let manager: RecordManager;
-  let validator: { validateIngestion: ReturnType<typeof vi.fn>; validateFootprint: ReturnType<typeof vi.fn> };
+  let validator: {
+    validateIngestion: ReturnType<typeof vi.fn>;
+    validateFootprint: ReturnType<typeof vi.fn>;
+    validateDelete: ReturnType<typeof vi.fn>;
+  };
+  let jobnikClient: { createIngestionJob: ReturnType<typeof vi.fn>; createDeleteJob: ReturnType<typeof vi.fn> };
   let filesValidator: { validateIngestionFiles: ReturnType<typeof vi.fn> };
   let metadataExtractor: { extract: ReturnType<typeof vi.fn> };
   let productReader: { read: ReturnType<typeof vi.fn> };
@@ -23,7 +29,11 @@ describe('RecordManager', function () {
   const modelPolygon = { type: 'Polygon', coordinates: [[[2.34, 48.86]]] };
 
   beforeEach(async function () {
-    validator = { validateIngestion: vi.fn().mockResolvedValue(undefined), validateFootprint: vi.fn() };
+    validator = { validateIngestion: vi.fn().mockResolvedValue(undefined), validateFootprint: vi.fn(), validateDelete: vi.fn() };
+    jobnikClient = {
+      createIngestionJob: vi.fn().mockResolvedValue({ jobId: 'job-1', status: 'PENDING' }),
+      createDeleteJob: vi.fn().mockResolvedValue({ jobId: 'del-1', status: 'PENDING' }),
+    };
     filesValidator = { validateIngestionFiles: vi.fn().mockResolvedValue(files) };
     metadataExtractor = { extract: vi.fn().mockResolvedValue(extracted) };
     productReader = { read: vi.fn().mockResolvedValue(footprint) };
@@ -36,12 +46,13 @@ describe('RecordManager', function () {
       metadataExtractor as unknown as MetadataExtractor,
       productReader as unknown as ProductReader,
       tilesetReader as unknown as TilesetReader,
-      tilesetValidator as unknown as TilesetValidator
+      tilesetValidator as unknown as TilesetValidator,
+      jobnikClient as unknown as JobnikClient
     );
   });
 
   describe('createIngestion', function () {
-    it('should return a job response with a jobId and status', async function () {
+    it('should create the Jobnik ingestion job with the request fields and the extracted metadata', async function () {
       const payload: IngestionPayload = {
         modelPath: 'paris/data/tileset.json',
         productShapefilePath: 'paris/shape/Product.shp',
@@ -53,8 +64,7 @@ describe('RecordManager', function () {
 
       const result = await manager.createIngestion(payload);
 
-      expect(result.jobId).toBeTypeOf('string');
-      expect(result.status).toBeTypeOf('string');
+      expect(result).toEqual({ jobId: 'job-1', status: 'PENDING' });
       expect(filesValidator.validateIngestionFiles).toHaveBeenCalledWith(payload);
       expect(productReader.read).toHaveBeenCalledWith(files.product.shp);
       expect(metadataExtractor.extract).toHaveBeenCalledWith(files);
@@ -62,6 +72,26 @@ describe('RecordManager', function () {
       expect(tilesetReader.readModelPolygon).toHaveBeenCalledWith(files.modelPath);
       expect(validator.validateFootprint).toHaveBeenCalledWith(footprint, modelPolygon);
       expect(validator.validateIngestion).toHaveBeenCalledWith(payload, extracted);
+      expect(jobnikClient.createIngestionJob).toHaveBeenCalledWith({
+        modelPath: payload.modelPath,
+        metadata: { productType: '3DPhotoRealistic', classification: '4', region: ['France'], ...extracted, footprint },
+      });
+    });
+
+    it('should not create a job when the ingestion validation fails', async function () {
+      validator.validateIngestion.mockRejectedValue(new Error('in flight'));
+
+      await expect(
+        manager.createIngestion({
+          modelPath: 'paris/data/tileset.json',
+          productShapefilePath: 'paris/shape/Product.shp',
+          metadataShapefilePath: 'paris/shape/ShapeMetadata.shp',
+          productType: '3DPhotoRealistic',
+          classification: '4',
+          region: ['France'],
+        })
+      ).rejects.toThrow('in flight');
+      expect(jobnikClient.createIngestionJob).not.toHaveBeenCalled();
     });
 
     it('should reject when the product shapefile is invalid', async function () {
@@ -170,11 +200,22 @@ describe('RecordManager', function () {
   });
 
   describe('deleteRecord', function () {
-    it('should return a job response', function () {
-      const result = manager.deleteRecord('rec-1');
+    it('should validate the record and create a delete job for it', async function () {
+      const record = { id: 'rec-1', productId: 'p-1', productName: 'paris', productStatus: 'UNPUBLISHED' };
+      validator.validateDelete.mockResolvedValue(record);
 
-      expect(result.jobId).toBeTypeOf('string');
-      expect(result.status).toBeTypeOf('string');
+      const result = await manager.deleteRecord('rec-1');
+
+      expect(validator.validateDelete).toHaveBeenCalledWith('rec-1');
+      expect(jobnikClient.createDeleteJob).toHaveBeenCalledWith(record);
+      expect(result).toEqual({ jobId: 'del-1', status: 'PENDING' });
+    });
+
+    it('should not create a delete job when the validation fails', async function () {
+      validator.validateDelete.mockRejectedValue(new Error('record not found'));
+
+      await expect(manager.deleteRecord('rec-1')).rejects.toThrow('record not found');
+      expect(jobnikClient.createDeleteJob).not.toHaveBeenCalled();
     });
   });
 

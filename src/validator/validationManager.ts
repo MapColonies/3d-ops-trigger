@@ -1,8 +1,9 @@
 import type { Logger } from '@map-colonies/js-logger';
 import { StatusCodes } from 'http-status-codes';
 import { inject, injectable } from 'tsyringe';
-import { ingestion3DPayloadSchema, AppError, type LogContext } from '@map-colonies/3d-shared';
+import { ingestion3DPayloadSchema, AppError, type LogContext, type Record3D } from '@map-colonies/3d-shared';
 import type { ZodError } from 'zod';
+import { ProductType, RecordStatus } from '@map-colonies/types';
 import { area, feature, featureCollection, intersect, union } from '@turf/turf';
 import type { MultiPolygon, Polygon } from 'geojson';
 import { SERVICES } from '@common/constants';
@@ -10,6 +11,7 @@ import type { ConfigType } from '@common/config';
 import { ERROR_FOOTPRINT_COVERAGE_FAILED, ERROR_FOOTPRINT_FAR_FROM_MODEL } from '../extractor/constants';
 import { LookupTablesClient } from '../externalServices/lookupTables/lookupTablesClient';
 import { CatalogClient } from '../externalServices/catalog/catalogClient';
+import { JobnikClient } from '../externalServices/jobnik/jobnikClient';
 import type { ProductIdentity } from './interfaces';
 
 const FULL_COVERAGE_PERCENT = 100;
@@ -17,6 +19,10 @@ const COVERAGE_DECIMALS = 2;
 
 export const ERROR_METADATA_PRODUCT_NAME_UNIQUE = 'product name is not unique!';
 export const ERROR_METADATA_PRODUCT_ID_UNIQUE = 'product id is not unique!';
+export const ERROR_PRODUCT_NAME_IN_FLIGHT = 'product name already has an in-flight ingestion job';
+export const ERROR_DELETE_RECORD_NOT_FOUND = "recordId doesn't match exactly one existing record";
+export const ERROR_DELETE_PRODUCT_TYPE = `Cannot delete a record whose productType is "${ProductType.QUANTIZED_MESH_DTM_BEST}"`;
+export const ERROR_DELETE_STATUS = `Cannot delete a record whose productStatus is not "${RecordStatus.UNPUBLISHED}"`;
 
 @injectable()
 export class ValidationManager {
@@ -27,7 +33,8 @@ export class ValidationManager {
     @inject(SERVICES.CONFIG) config: ConfigType,
     @inject(SERVICES.LOGGER) private readonly logger: Logger,
     @inject(LookupTablesClient) private readonly lookupTablesClient: LookupTablesClient,
-    @inject(CatalogClient) private readonly catalogClient: CatalogClient
+    @inject(CatalogClient) private readonly catalogClient: CatalogClient,
+    @inject(JobnikClient) private readonly jobnikClient: JobnikClient
   ) {
     this.intersectionPercentageLimit = config.get('validation.intersectionPercentageLimit');
     this.logContext = {
@@ -52,11 +59,34 @@ export class ValidationManager {
       this.validateRegion(parsed.data.region),
       this.validateProductIdUnique(product.productId),
       this.validateProductNameUnique(product.productName),
+      this.validateProductNameNotInFlight(product.productName),
     ]);
     const failure = results.find((result): result is PromiseRejectedResult => result.status === 'rejected');
     if (failure) {
       throw failure.reason as Error;
     }
+  }
+
+  public async validateDelete(recordId: string): Promise<Record3D> {
+    const logContext = { ...this.logContext, function: this.validateDelete.name };
+    const records = await this.catalogClient.findRecords({ id: recordId });
+    this.logger.debug({ msg: 'delete validation', logContext, recordId, matches: records.length });
+
+    const [record] = records;
+    if (records.length !== 1 || record === undefined) {
+      this.logger.error({ msg: ERROR_DELETE_RECORD_NOT_FOUND, logContext, recordId, matches: records.length });
+      throw new AppError('badRequest', StatusCodes.BAD_REQUEST, ERROR_DELETE_RECORD_NOT_FOUND, true);
+    }
+    if (record.productType === ProductType.QUANTIZED_MESH_DTM_BEST) {
+      this.logger.error({ msg: ERROR_DELETE_PRODUCT_TYPE, logContext, recordId, productType: record.productType });
+      throw new AppError('badRequest', StatusCodes.BAD_REQUEST, ERROR_DELETE_PRODUCT_TYPE, true);
+    }
+    if (record.productStatus !== RecordStatus.UNPUBLISHED) {
+      this.logger.error({ msg: ERROR_DELETE_STATUS, logContext, recordId, productStatus: record.productStatus });
+      throw new AppError('badRequest', StatusCodes.BAD_REQUEST, ERROR_DELETE_STATUS, true);
+    }
+
+    return record;
   }
 
   public validateFootprint(footprint: Polygon | MultiPolygon, modelPolygon: Polygon): void {
@@ -139,6 +169,17 @@ export class ValidationManager {
         existingRecordIds: records.map((record) => record.id),
       });
       throw new AppError('badRequest', StatusCodes.BAD_REQUEST, ERROR_METADATA_PRODUCT_NAME_UNIQUE, true);
+    }
+  }
+
+  private async validateProductNameNotInFlight(productName: string): Promise<void> {
+    const logContext = { ...this.logContext, function: this.validateProductNameNotInFlight.name };
+    const inFlight = await this.jobnikClient.hasInFlightIngestionJob(productName);
+    this.logger.debug({ msg: 'in-flight duplicate validation', logContext, productName, inFlight });
+
+    if (inFlight) {
+      this.logger.error({ msg: ERROR_PRODUCT_NAME_IN_FLIGHT, logContext, productName });
+      throw new AppError('conflict', StatusCodes.CONFLICT, ERROR_PRODUCT_NAME_IN_FLIGHT, true);
     }
   }
 

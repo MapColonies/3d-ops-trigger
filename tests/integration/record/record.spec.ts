@@ -1,5 +1,5 @@
 import { jsLogger } from '@map-colonies/js-logger';
-import { describe, it, expect, beforeAll, afterEach } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
 import nock from 'nock';
 import { trace } from '@opentelemetry/api';
 import httpStatusCodes from 'http-status-codes';
@@ -9,6 +9,8 @@ import { getApp } from '@src/app';
 import { SERVICES } from '@common/constants';
 import { getConfig, initConfig, type LookupTablesConfig } from '@src/common/config';
 import type { IngestionPayload } from '@src/record/models/recordManager';
+import { JobnikClient } from '@src/externalServices/jobnik/jobnikClient';
+import { ERROR_DELETE_RECORD_NOT_FOUND, ERROR_DELETE_STATUS, ERROR_PRODUCT_NAME_IN_FLIGHT } from '@src/validator/validationManager';
 
 const ingestionPayload: IngestionPayload = {
   modelPath: '\\\\domtest\\models\\paris\\data\\tileset.json',
@@ -17,6 +19,22 @@ const ingestionPayload: IngestionPayload = {
   productType: '3DPhotoRealistic',
   classification: '4',
   region: ['France'],
+};
+
+const deletableRecord = {
+  id: 'rec-1',
+  productId: 'PRS',
+  productName: 'paris',
+  productType: '3DPhotoRealistic',
+  productVersion: 1,
+  producerName: 'IDFMU',
+  productStatus: 'UNPUBLISHED',
+};
+
+const jobnikStub = {
+  createIngestionJob: vi.fn(),
+  createDeleteJob: vi.fn(),
+  hasInFlightIngestionJob: vi.fn(),
 };
 
 let lookupTables: LookupTablesConfig;
@@ -50,10 +68,17 @@ describe('record', function () {
       override: [
         { token: SERVICES.LOGGER, provider: { useValue: await jsLogger({ enabled: false }) } },
         { token: SERVICES.TRACER, provider: { useValue: trace.getTracer('testTracer') } },
+        { token: JobnikClient, provider: { useValue: jobnikStub as unknown as JobnikClient } },
       ],
       useChild: true,
     });
     requestSender = await createRequestSender<paths, operations>('openapi3.yaml', app);
+  });
+
+  beforeEach(function () {
+    jobnikStub.createIngestionJob.mockReset().mockResolvedValue({ jobId: 'job-1', status: 'PENDING' });
+    jobnikStub.createDeleteJob.mockReset().mockResolvedValue({ jobId: 'del-1', status: 'PENDING' });
+    jobnikStub.hasInFlightIngestionJob.mockReset().mockResolvedValue(false);
   });
 
   afterEach(function () {
@@ -73,7 +98,16 @@ describe('record', function () {
 
         expect(response).toSatisfyApiSpec();
         expect(response.status).toBe(httpStatusCodes.CREATED);
-        expect(response.body).toMatchObject({ status: 'PENDING' });
+        expect(response.body).toEqual({ jobId: 'job-1', status: 'PENDING' });
+        expect(jobnikStub.createIngestionJob).toHaveBeenCalledWith({
+          modelPath,
+          metadata: expect.objectContaining({
+            productType: '3DPhotoRealistic',
+            classification: '4',
+            region: ['France'],
+            productName: 'paris',
+          }) as unknown,
+        });
       });
     });
 
@@ -163,6 +197,19 @@ describe('record', function () {
         expect(response.status).toBe(httpStatusCodes.BAD_REQUEST);
         expect(response.body).toHaveProperty('message', 'product id is not unique!');
       });
+
+      it('should return 409 when the product name already has an in-flight ingestion job', async function () {
+        mockLookupTables();
+        mockCatalogFind();
+        jobnikStub.hasInFlightIngestionJob.mockResolvedValue(true);
+
+        const response = await requestSender.createRecord({ requestBody: ingestionPayload });
+
+        expect(response).toSatisfyApiSpec();
+        expect(response.status).toBe(httpStatusCodes.CONFLICT);
+        expect(response.body).toHaveProperty('message', ERROR_PRODUCT_NAME_IN_FLIGHT);
+        expect(jobnikStub.createIngestionJob).not.toHaveBeenCalled();
+      });
     });
 
     describe('Sad Path 😥', function () {
@@ -190,12 +237,48 @@ describe('record', function () {
   describe('DELETE /record/{id}', function () {
     describe('Happy Path 🙂', function () {
       it('should return 200 and a job response', async function () {
+        mockCatalogFind([deletableRecord]);
+
         const response = await requestSender.deleteRecord({ pathParams: { id: 'rec-1' } });
 
         expect(response).toSatisfyApiSpec();
         expect(response.status).toBe(httpStatusCodes.OK);
+        expect(response.body).toEqual({ jobId: 'del-1', status: 'PENDING' });
+        expect(jobnikStub.createDeleteJob).toHaveBeenCalledWith(deletableRecord);
+      });
+    });
 
-        expect(response.body).toMatchObject({ status: 'PENDING' });
+    describe('Bad Path 😡', function () {
+      it('should return 400 when the record does not exist', async function () {
+        mockCatalogFind();
+
+        const response = await requestSender.deleteRecord({ pathParams: { id: 'missing' } });
+
+        expect(response).toSatisfyApiSpec();
+        expect(response.status).toBe(httpStatusCodes.BAD_REQUEST);
+        expect(response.body).toHaveProperty('message', ERROR_DELETE_RECORD_NOT_FOUND);
+        expect(jobnikStub.createDeleteJob).not.toHaveBeenCalled();
+      });
+
+      it('should return 400 when the record is published', async function () {
+        mockCatalogFind([{ ...deletableRecord, productStatus: 'PUBLISHED' }]);
+
+        const response = await requestSender.deleteRecord({ pathParams: { id: 'rec-1' } });
+
+        expect(response).toSatisfyApiSpec();
+        expect(response.status).toBe(httpStatusCodes.BAD_REQUEST);
+        expect(response.body).toHaveProperty('message', ERROR_DELETE_STATUS);
+      });
+    });
+
+    describe('Sad Path 😥', function () {
+      it('should return 500 when the catalog service is down', async function () {
+        nock(catalogUrl).post('/metadata/find').reply(httpStatusCodes.SERVICE_UNAVAILABLE);
+
+        const response = await requestSender.deleteRecord({ pathParams: { id: 'rec-1' } });
+
+        expect(response).toSatisfyApiSpec();
+        expect(response.status).toBe(httpStatusCodes.INTERNAL_SERVER_ERROR);
       });
     });
   });

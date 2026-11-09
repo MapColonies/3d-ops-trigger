@@ -19,6 +19,19 @@ interface ValidationConfig {
   intersectionPercentageLimit: number;
 }
 
+interface JobManagerConfig {
+  url: string;
+  ingestion: {
+    jobType: string;
+    taskType: string;
+    batches: number;
+  };
+  delete: {
+    jobType: string;
+    taskType: string;
+  };
+}
+
 interface ExternalServicesConfig {
   catalogUrl: string;
   extractableUrl: string;
@@ -30,6 +43,7 @@ type OpsTriggerConfigType = commonBoilerplateV3Type & {
   paths: PathsConfig;
   productReader: ProductReaderConfig;
   validation: ValidationConfig;
+  jobManager: JobManagerConfig;
 };
 
 type ConfigType = ConfigInstance<OpsTriggerConfigType>;
@@ -41,7 +55,7 @@ const opsTriggerConfigSchema = {
     { $ref: commonBoilerplateV3.$id },
     {
       type: 'object',
-      required: ['externalServices', 'paths', 'productReader', 'validation'],
+      required: ['externalServices', 'paths', 'productReader', 'validation', 'jobManager'],
       properties: {
         paths: {
           type: 'object',
@@ -63,6 +77,30 @@ const opsTriggerConfigSchema = {
           required: ['maxVerticesPerChunk'],
           properties: {
             maxVerticesPerChunk: { type: 'integer', minimum: 1 },
+          },
+        },
+        jobManager: {
+          type: 'object',
+          required: ['url', 'ingestion', 'delete'],
+          properties: {
+            url: { type: 'string' },
+            ingestion: {
+              type: 'object',
+              required: ['jobType'],
+              properties: {
+                jobType: { type: 'string' },
+                taskType: { type: 'string' },
+                batches: { type: 'number' },
+              },
+            },
+            delete: {
+              type: 'object',
+              required: ['jobType'],
+              properties: {
+                jobType: { type: 'string' },
+                taskType: { type: 'string' },
+              },
+            },
           },
         },
         externalServices: {
@@ -103,4 +141,4 @@ function getConfig(): ConfigType {
 }
 
 export { getConfig, initConfig };
-export type { ConfigType, LookupTablesConfig, ExternalServicesConfig, PathsConfig, ProductReaderConfig, ValidationConfig };
+export type { ConfigType, JobManagerConfig, LookupTablesConfig, ExternalServicesConfig, PathsConfig, ProductReaderConfig, ValidationConfig };

@@ -50,5 +50,17 @@
   "paths": {
     "basePath": "\\\\domtest\\mimi\\archi\\maz\\silver\\libot",
     "pvPath": "/home/3DModels"
+  },
+  "jobManager": {
+    "url": "http://127.0.0.1:8080",
+    "ingestion": {
+      "jobType": "Ingestion_New_3D",
+      "taskType": "tilesCopying",
+      "batches": 100
+    },
+    "delete": {
+      "jobType": "Delete_3D",
+      "taskType": "deleteModel"
+    }
   }
 }

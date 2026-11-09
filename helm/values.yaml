@@ -99,6 +99,15 @@ env:
     url:
   extractable:
     url:
+  jobManager:
+    url:
+    ingestion:
+      jobType: Ingestion_New_3D
+      taskType: tilesCopying
+      batches: 100
+    delete:
+      jobType: Delete_3D
+      taskType: deleteModel
 
 telemetry:
   logger:
