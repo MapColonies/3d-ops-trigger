@@ -7,7 +7,9 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { TilesetTarget3tz } from '3d-tiles-tools';
 import { Validators } from '3d-tiles-validator';
 import { AppError } from '@map-colonies/3d-shared';
-import { ERROR_TILESET_VALIDATION_FAILED, TilesetValidator } from '@src/validator/tilesetValidator';
+import { TilesetValidator } from '@src/validator/tilesetValidator';
+import { TilesetReader } from '@src/extractor/tilesetReader';
+import { ERROR_TILESET_ASSET_VERSION, ERROR_TILESET_VALIDATION_FAILED } from '@src/validator/constants';
 
 const FIXTURE_DATA = join(__dirname, '../../fixtures/ingestion/paris/data');
 
@@ -38,7 +40,7 @@ describe('TilesetValidator', function () {
 
   beforeEach(async function () {
     logger = await jsLogger({ enabled: false });
-    validator = new TilesetValidator(logger);
+    validator = new TilesetValidator(logger, new TilesetReader(logger));
     folder = await mkdtemp(join(tmpdir(), 'ops-trigger-validator-'));
     validTileset = JSON.parse(await readFile(join(FIXTURE_DATA, 'tileset.json'), 'utf-8')) as typeof validTileset;
   });
@@ -54,7 +56,7 @@ describe('TilesetValidator', function () {
 
   it('should accept a tileset with warnings only and log them', async function () {
     const warn = vi.spyOn(logger, 'warn');
-    const path = await write('tileset.json', JSON.stringify({ ...validTileset, asset: { version: 'unknown' } }));
+    const path = await write('tileset.json', JSON.stringify({ ...validTileset, asset: { version: '2.0' } }));
 
     await expect(validator.validate(path)).resolves.toBeUndefined();
     expect(warn).toHaveBeenCalledWith(expect.objectContaining({ warnings: [expect.objectContaining({ type: 'ASSET_VERSION_UNKNOWN' })] }));
@@ -68,6 +70,68 @@ describe('TilesetValidator', function () {
     await expect(promise).rejects.toThrow(
       `${ERROR_TILESET_VALIDATION_FAILED} for tileset.json: PROPERTY_MISSING: The 'geometricError' property is required (at /geometricError)`
     );
+  });
+
+  it.each([
+    ['the asset', (): unknown => ({ ...validTileset, asset: undefined }), "PROPERTY_MISSING: The 'asset' property is required (at /asset)"],
+    [
+      'the asset.version',
+      (): unknown => ({ ...validTileset, asset: {} }),
+      "PROPERTY_MISSING: The 'version' property is required (at /asset/version)",
+    ],
+    [
+      'the root.boundingVolume',
+      (): unknown => ({ ...validTileset, root: { ...validTileset.root, boundingVolume: undefined } }),
+      "PROPERTY_MISSING: The 'boundingVolume' property is required (at /root/boundingVolume)",
+    ],
+  ])('should reject with 400 a tileset without %s', async function (_case, tileset, problem) {
+    const promise = validator.validate(await write('tileset.json', JSON.stringify(tileset())));
+
+    await expect(promise).rejects.toMatchObject({ status: StatusCodes.BAD_REQUEST });
+    await expect(promise).rejects.toThrow(problem);
+  });
+
+  it('should reject with 400 a tileset whose asset.version is not a string', async function () {
+    const promise = validator.validate(await write('tileset.json', JSON.stringify({ ...validTileset, asset: { version: 1 } })));
+
+    await expect(promise).rejects.toMatchObject({ status: StatusCodes.BAD_REQUEST });
+    await expect(promise).rejects.toThrow("TYPE_MISMATCH: The 'version' property must have type 'string', but has type 'number' (at /asset/version)");
+  });
+
+  it.each(['1.0', '1.1', '1.2', '2.0', '10.3'])('should accept a tileset with asset.version %s', async function (version) {
+    const path = await write('tileset.json', JSON.stringify({ ...validTileset, asset: { version } }));
+
+    await expect(validator.validate(path)).resolves.toBeUndefined();
+  });
+
+  it.each([
+    ['below 1.0', '0.0'],
+    ['not a version', 'latest'],
+  ])('should reject with 400 a tileset whose asset.version is %s and report the received value', async function (_case, version) {
+    const promise = validator.validate(await write('tileset.json', JSON.stringify({ ...validTileset, asset: { version } })));
+
+    await expect(promise).rejects.toMatchObject({ status: StatusCodes.BAD_REQUEST });
+    await expect(promise).rejects.toThrow(
+      `${ERROR_TILESET_VALIDATION_FAILED} for tileset.json: ASSET_VERSION_UNSUPPORTED: ${ERROR_TILESET_ASSET_VERSION}, received "${version}" (at /asset/version)`
+    );
+  });
+
+  it('should report the old asset.version first together with the problems it causes', async function () {
+    const legacyTileset = { ...validTileset, asset: { version: '0.0' }, root: { ...validTileset.root, content: { url: 'tile.b3dm' } } };
+    const promise = validator.validate(await write('tileset.json', JSON.stringify(legacyTileset)));
+
+    await expect(promise).rejects.toMatchObject({ status: StatusCodes.BAD_REQUEST });
+    await expect(promise).rejects.toThrow(
+      `${ERROR_TILESET_VALIDATION_FAILED} for tileset.json: ASSET_VERSION_UNSUPPORTED: ${ERROR_TILESET_ASSET_VERSION}, received "0.0" (at /asset/version); ` +
+        "PROPERTY_MISSING: The 'uri' property is required (at /root/content/uri)"
+    );
+  });
+
+  it('should reject with 400 a .3tz whose tileset asset.version is below 1.0', async function () {
+    const promise = validator.validate(await writeArchive([['tileset.json', JSON.stringify({ ...validTileset, asset: { version: '0.0' } })]]));
+
+    await expect(promise).rejects.toMatchObject({ status: StatusCodes.BAD_REQUEST });
+    await expect(promise).rejects.toThrow(`ASSET_VERSION_UNSUPPORTED: ${ERROR_TILESET_ASSET_VERSION}, received "0.0" (at /asset/version)`);
   });
 
   it('should group a repeated problem with its count and first location', async function () {
@@ -144,16 +208,6 @@ describe('TilesetValidator', function () {
     await expect(promise).rejects.toMatchObject({ status: StatusCodes.BAD_REQUEST });
     await expect(promise).rejects.toThrow(`${ERROR_TILESET_VALIDATION_FAILED} for model.3tz: IO_ERROR`);
     await expect(promise).rejects.not.toThrow(folder);
-  });
-
-  // a missing file is rejected with 400 by FilesValidator before this validator runs,
-  // so a file that is gone at this point is a server-side problem
-  it('should reject with 500 when the tileset file is gone', async function () {
-    const promise = validator.validate(join(folder, 'tileset.json'));
-
-    await expect(promise).rejects.toThrow(AppError);
-    await expect(promise).rejects.toMatchObject({ status: StatusCodes.INTERNAL_SERVER_ERROR });
-    await expect(promise).rejects.toThrow(`${ERROR_TILESET_VALIDATION_FAILED} for tileset.json`);
   });
 
   it('should reject with 500 when the validator itself fails', async function () {

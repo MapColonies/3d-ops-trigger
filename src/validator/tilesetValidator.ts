@@ -5,21 +5,19 @@ import { inject, injectable } from 'tsyringe';
 import { ValidationIssueSeverity, ValidationOptions, Validators, type ValidationIssue } from '3d-tiles-validator';
 import { AppError, type LogContext } from '@map-colonies/3d-shared';
 import { SERVICES } from '@common/constants';
-
-interface IssueDetails {
-  type: string;
-  message: string;
-  path: string;
-}
-
-export const ERROR_TILESET_VALIDATION_FAILED = 'tileset validation failed';
+import { TilesetReader } from '../extractor/tilesetReader';
+import { ASSET_VERSION_UNSUPPORTED, ERROR_TILESET_ASSET_VERSION, ERROR_TILESET_VALIDATION_FAILED, MIN_ASSET_MAJOR_VERSION } from './constants';
+import type { IssueDetails } from './interfaces';
 
 @injectable()
 export class TilesetValidator {
   private readonly logContext: LogContext;
   private readonly validationOptions = ValidationOptions.fromJson({ validateContentData: false });
 
-  public constructor(@inject(SERVICES.LOGGER) private readonly logger: Logger) {
+  public constructor(
+    @inject(SERVICES.LOGGER) private readonly logger: Logger,
+    @inject(TilesetReader) private readonly tilesetReader: TilesetReader
+  ) {
     this.logContext = {
       fileName: __filename,
       class: TilesetValidator.name,
@@ -40,7 +38,7 @@ export class TilesetValidator {
       throw new AppError('tileset-validator', StatusCodes.INTERNAL_SERVER_ERROR, message, true);
     }
 
-    const errors = this.toDetails(issues, ValidationIssueSeverity.ERROR, modelPath);
+    const errors = [...(await this.checkAssetVersion(modelPath)), ...this.toDetails(issues, ValidationIssueSeverity.ERROR, modelPath)];
     const warnings = this.toDetails(issues, ValidationIssueSeverity.WARNING, modelPath);
     if (warnings.length > 0) {
       this.logger.warn({ msg: 'tileset validation warnings', logContext, modelPath, warnings });
@@ -52,6 +50,27 @@ export class TilesetValidator {
     }
 
     this.logger.info({ msg: 'tileset validated successfully', logContext, modelPath });
+  }
+
+  private async checkAssetVersion(modelPath: string): Promise<IssueDetails[]> {
+    let version: unknown;
+    try {
+      const tileset = JSON.parse(await this.tilesetReader.readContent(modelPath)) as { asset?: { version?: unknown } } | null;
+      version = tileset?.asset?.version;
+    } catch {
+      // an unreadable or malformed tileset is already reported by 3d-tiles-validator
+      return [];
+    }
+    // a missing or non-string version is already reported by 3d-tiles-validator
+    if (typeof version !== 'string' || this.isSupportedVersion(version)) {
+      return [];
+    }
+    return [{ type: ASSET_VERSION_UNSUPPORTED, message: `${ERROR_TILESET_ASSET_VERSION}, received "${version}"`, path: '/asset/version' }];
+  }
+
+  private isSupportedVersion(version: string): boolean {
+    const match = /^(\d+)(\.\d+)+$/.exec(version);
+    return match !== null && Number(match[1]) >= MIN_ASSET_MAJOR_VERSION;
   }
 
   private toDetails(issues: readonly ValidationIssue[], severity: ValidationIssueSeverity, modelPath: string): IssueDetails[] {
