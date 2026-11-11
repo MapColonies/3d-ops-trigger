@@ -5,17 +5,19 @@ import { inject, injectable } from 'tsyringe';
 import { ValidationIssueSeverity, ValidationOptions, Validators, type ValidationIssue } from '3d-tiles-validator';
 import { AppError, type LogContext } from '@map-colonies/3d-shared';
 import { SERVICES } from '@common/constants';
-
-const MAX_REPORTED_ISSUES = 3;
-
-export const ERROR_TILESET_VALIDATION_FAILED = 'tileset validation failed';
+import { TilesetReader } from '../extractor/tilesetReader';
+import { ASSET_VERSION_UNSUPPORTED, ERROR_TILESET_ASSET_VERSION, ERROR_TILESET_VALIDATION_FAILED, MIN_ASSET_MAJOR_VERSION } from './constants';
+import type { IssueDetails } from './interfaces';
 
 @injectable()
 export class TilesetValidator {
   private readonly logContext: LogContext;
   private readonly validationOptions = ValidationOptions.fromJson({ validateContentData: false });
 
-  public constructor(@inject(SERVICES.LOGGER) private readonly logger: Logger) {
+  public constructor(
+    @inject(SERVICES.LOGGER) private readonly logger: Logger,
+    @inject(TilesetReader) private readonly tilesetReader: TilesetReader
+  ) {
     this.logContext = {
       fileName: __filename,
       class: TilesetValidator.name,
@@ -24,37 +26,73 @@ export class TilesetValidator {
 
   public async validate(modelPath: string): Promise<void> {
     const logContext = { ...this.logContext, function: this.validate.name };
+    const fileName = basename(modelPath);
     this.logger.info({ msg: 'validating tileset with 3d-tiles-validator', logContext, modelPath });
 
     let issues: readonly ValidationIssue[];
     try {
       ({ issues } = await Validators.validateTilesetFile(modelPath, this.validationOptions));
     } catch (err) {
-      this.logger.error({ msg: ERROR_TILESET_VALIDATION_FAILED, logContext, modelPath, err });
-      throw new AppError('badRequest', StatusCodes.BAD_REQUEST, ERROR_TILESET_VALIDATION_FAILED, true);
+      const message = `${ERROR_TILESET_VALIDATION_FAILED} for ${fileName}: an unexpected error occurred while running the validator`;
+      this.logger.error({ msg: message, logContext, modelPath, err });
+      throw new AppError('tileset-validator', StatusCodes.INTERNAL_SERVER_ERROR, message, true);
     }
 
-    const errors = issues.filter((issue) => issue.severity === ValidationIssueSeverity.ERROR);
-    const warnings = issues.filter((issue) => issue.severity === ValidationIssueSeverity.WARNING);
+    const specErrors = this.toDetails(issues, ValidationIssueSeverity.ERROR, modelPath);
+    const errors = [...(await this.checkAssetVersion(modelPath, specErrors)), ...specErrors];
+    const warnings = this.toDetails(issues, ValidationIssueSeverity.WARNING, modelPath);
     if (warnings.length > 0) {
-      this.logger.warn({
-        msg: 'tileset validation warnings',
-        logContext,
-        modelPath,
-        warnings: warnings.map((issue) => this.format(issue, modelPath)),
-      });
+      this.logger.warn({ msg: 'tileset validation warnings', logContext, modelPath, warnings });
     }
     if (errors.length > 0) {
-      const details = errors.map((issue) => this.format(issue, modelPath));
-      const message = `${ERROR_TILESET_VALIDATION_FAILED}: ${details.slice(0, MAX_REPORTED_ISSUES).join('; ')}`;
-      this.logger.error({ msg: message, logContext, modelPath, errors: details });
+      const message = `${ERROR_TILESET_VALIDATION_FAILED} for ${fileName}: ${this.summarize(errors).join('; ')}`;
+      this.logger.error({ msg: message, logContext, modelPath, errorsCount: errors.length, errors });
       throw new AppError('badRequest', StatusCodes.BAD_REQUEST, message, true);
     }
 
     this.logger.info({ msg: 'tileset validated successfully', logContext, modelPath });
   }
+  private async checkAssetVersion(modelPath: string, specErrors: IssueDetails[]): Promise<IssueDetails[]> {
+    if (specErrors.some(({ path }) => path === '')) {
+      return [];
+    }
+    const tileset = (await this.tilesetReader.readTileset(modelPath)) as { asset?: { version?: unknown } } | null;
+    const version = tileset?.asset?.version;
+    if (typeof version !== 'string' || this.isSupportedVersion(version)) {
+      return [];
+    }
+    return [{ type: ASSET_VERSION_UNSUPPORTED, message: `${ERROR_TILESET_ASSET_VERSION}, received "${version}"`, path: '/asset/version' }];
+  }
 
-  private format(issue: ValidationIssue, modelPath: string): string {
-    return `${issue.type}: ${issue.message} (${issue.path})`.replaceAll(modelPath, basename(modelPath));
+  private isSupportedVersion(version: string): boolean {
+    const match = /^(\d+)(\.\d+)+$/.exec(version);
+    return match !== null && Number(match[1]) >= MIN_ASSET_MAJOR_VERSION;
+  }
+
+  private toDetails(issues: readonly ValidationIssue[], severity: ValidationIssueSeverity, modelPath: string): IssueDetails[] {
+    return issues
+      .filter((issue) => issue.severity === severity)
+      .map((issue) => ({
+        type: issue.type,
+        message: issue.message.replaceAll(modelPath, basename(modelPath)),
+        path: issue.path === modelPath ? '' : issue.path.replaceAll(modelPath, basename(modelPath)),
+      }))
+      .sort((first, second) => first.path.localeCompare(second.path, undefined, { numeric: true }));
+  }
+
+  private summarize(errors: IssueDetails[]): string[] {
+    const paths = new Map<string, string[]>();
+    for (const { type, message, path } of errors) {
+      const problem = `${type}: ${message}`;
+      paths.set(problem, [...(paths.get(problem) ?? []), path]);
+    }
+
+    return [...paths].map(([problem, problemPaths]) => {
+      const locations = problemPaths.filter((path) => path !== '');
+      if (locations.length === 0) {
+        return problem;
+      }
+      return locations.length === 1 ? `${problem} (at ${locations[0]})` : `${problem} (${locations.length} times, first at ${locations[0]})`;
+    });
   }
 }

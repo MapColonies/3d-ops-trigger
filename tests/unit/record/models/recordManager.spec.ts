@@ -96,7 +96,7 @@ describe('RecordManager', function () {
       expect(validator.validateIngestion).not.toHaveBeenCalled();
     });
 
-    it('should reject when the tileset is invalid', async function () {
+    it('should reject when the tileset is invalid before reading the shapefiles', async function () {
       tilesetReader.readModelPolygon.mockRejectedValue(new Error('invalid tileset'));
 
       await expect(
@@ -109,6 +109,8 @@ describe('RecordManager', function () {
           region: ['France'],
         })
       ).rejects.toThrow('invalid tileset');
+      expect(productReader.read).not.toHaveBeenCalled();
+      expect(metadataExtractor.extract).not.toHaveBeenCalled();
       expect(validator.validateFootprint).not.toHaveBeenCalled();
       expect(validator.validateIngestion).not.toHaveBeenCalled();
     });

@@ -41,11 +41,9 @@ export class RecordManager {
     const files = await this.filesValidator.validateIngestionFiles(payload);
     await this.tilesetValidator.validate(files.modelPath);
 
-    const [footprint, modelPolygon, metadata] = await Promise.all([
-      this.productReader.read(files.product.shp),
-      this.tilesetReader.readModelPolygon(files.modelPath),
-      this.metadataExtractor.extract(files),
-    ]);
+    const modelPolygon = await this.tilesetReader.readModelPolygon(files.modelPath);
+
+    const [footprint, metadata] = await Promise.all([this.productReader.read(files.product.shp), this.metadataExtractor.extract(files)]);
 
     this.validator.validateFootprint(footprint, modelPolygon);
     await this.validator.validateIngestion(payload, metadata);
