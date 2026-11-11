@@ -21,9 +21,11 @@ import {
   ERROR_TILESET_ASSET_VERSION,
   ERROR_TILESET_INVALID,
   ERROR_TILESET_NOT_IN_ARCHIVE,
-  SUPPORTED_ASSET_VERSIONS,
+  MIN_ASSET_MAJOR_VERSION,
   TILESET_FILENAME,
 } from './constants';
+
+const isObject = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null;
 
 @injectable()
 export class TilesetReader {
@@ -54,7 +56,8 @@ export class TilesetReader {
       return modelPolygon;
     } catch (err) {
       const isKnownError = err instanceof Error && [ERROR_BOX_TILESET, ERROR_BAD_FORMAT_TILESET].includes(err.message);
-      this.reject(logContext, isKnownError ? err.message : ERROR_TILESET_INVALID, { modelPath, err });
+      const message = isKnownError ? err.message : `${ERROR_TILESET_INVALID}: could not calculate the model polygon from root.boundingVolume`;
+      this.reject(logContext, message, { modelPath, err });
     }
   }
 
@@ -96,26 +99,50 @@ export class TilesetReader {
     try {
       tileset = JSON.parse(content);
     } catch (err) {
-      this.reject(logContext, ERROR_TILESET_INVALID, { modelPath, err });
+      this.reject(logContext, `${ERROR_TILESET_INVALID}: the file is not valid JSON`, { modelPath, err });
     }
 
-    const { asset, root } = (tileset ?? {}) as { asset?: unknown; root?: { boundingVolume?: unknown } | null };
-    if (
-      typeof asset !== 'object' ||
-      asset === null ||
-      typeof root !== 'object' ||
-      root === null ||
-      typeof root.boundingVolume !== 'object' ||
-      root.boundingVolume === null
-    ) {
-      this.reject(logContext, ERROR_TILESET_INVALID, { modelPath });
+    const structureProblem = this.findStructureProblem(tileset);
+    if (structureProblem !== undefined) {
+      this.reject(logContext, `${ERROR_TILESET_INVALID}: ${structureProblem}`, { modelPath });
     }
 
-    const { version } = asset as { version?: unknown };
-    if (typeof version !== 'string' || !SUPPORTED_ASSET_VERSIONS.includes(version)) {
-      this.reject(logContext, ERROR_TILESET_ASSET_VERSION, { modelPath, version });
+    const { version } = (tileset as { asset: { version?: unknown } }).asset;
+    if (!this.isSupportedVersion(version)) {
+      this.reject(logContext, `${ERROR_TILESET_ASSET_VERSION}, received: ${this.describeVersion(version)}`, { modelPath, version });
     }
     return tileset as TileSetJson;
+  }
+
+  private findStructureProblem(tileset: unknown): string | undefined {
+    if (!isObject(tileset)) {
+      return 'the file content must be a JSON object';
+    }
+    for (const [property, value] of [
+      ['asset', tileset.asset],
+      ['root', tileset.root],
+      ['root.boundingVolume', isObject(tileset.root) ? tileset.root.boundingVolume : undefined],
+    ] as const) {
+      if (!isObject(value)) {
+        return `"${property}" is missing or is not an object`;
+      }
+    }
+    return undefined;
+  }
+
+  private describeVersion(version: unknown): string {
+    if (version === undefined) {
+      return 'none';
+    }
+    return typeof version === 'string' ? `"${version}"` : `${JSON.stringify(version)} (a ${typeof version}, expected a string)`;
+  }
+
+  private isSupportedVersion(version: unknown): boolean {
+    if (typeof version !== 'string') {
+      return false;
+    }
+    const match = /^(\d+)(\.\d+)+$/.exec(version);
+    return match !== null && Number(match[1]) >= MIN_ASSET_MAJOR_VERSION;
   }
 
   private reject(logContext: LogContext, message: string, details: Record<string, unknown>): never {

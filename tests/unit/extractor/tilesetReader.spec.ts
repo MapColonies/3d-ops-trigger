@@ -76,41 +76,42 @@ describe('TilesetReader', function () {
     await expect(reader.readModelPolygon(path)).resolves.toMatchObject({ type: 'Polygon' });
   });
 
-  it.each(['0.0', '1.0', '1.1'])('should read a tileset with asset.version %s', async function (version) {
+  it.each(['1.0', '1.1', '1.2', '2.0', '10.3'])('should read a tileset with asset.version %s', async function (version) {
     const path = await write('tileset.json', tilesetWithAsset({ version }));
 
     await expect(reader.readModelPolygon(path)).resolves.toMatchObject({ type: 'Polygon' });
   });
 
   it.each([
-    ['missing', {}],
-    ['not supported', { version: '2.0' }],
-    ['not a string', { version: 1 }],
-  ])('should reject a tileset whose asset.version is %s', async function (_case, asset) {
+    ['missing', {}, 'none'],
+    ['below 1.0', { version: '0.0' }, '"0.0"'],
+    ['not a version', { version: 'latest' }, '"latest"'],
+    ['not a string', { version: 1 }, '1 (a number, expected a string)'],
+  ])('should reject a tileset whose asset.version is %s and report the received value', async function (_case, asset, got) {
     const path = await write('tileset.json', tilesetWithAsset(asset));
 
-    await expect(reader.readModelPolygon(path)).rejects.toThrow(ERROR_TILESET_ASSET_VERSION);
+    await expect(reader.readModelPolygon(path)).rejects.toThrow(`${ERROR_TILESET_ASSET_VERSION}, received: ${got}`);
   });
 
   it.each([
-    ['not json', 'not json'],
-    ['missing asset', JSON.stringify({ root: { boundingVolume: { region: [0, 0, 1, 1, 0, 1] } } })],
-    ['missing root', JSON.stringify({ asset: { version: '1.0' } })],
-    ['null root', JSON.stringify({ asset: { version: '1.0' }, root: null })],
-    ['missing bounding volume', JSON.stringify({ asset: { version: '1.0' }, root: {} })],
-    ['null bounding volume', tilesetWith(null)],
-    ['null tileset', 'null'],
-  ])('should reject an invalid tileset json (%s)', async function (_case, content) {
+    ['not json', 'not json', 'the file is not valid JSON'],
+    ['missing asset', JSON.stringify({ root: { boundingVolume: { region: [0, 0, 1, 1, 0, 1] } } }), '"asset" is missing or is not an object'],
+    ['missing root', JSON.stringify({ asset: { version: '1.0' } }), '"root" is missing or is not an object'],
+    ['null root', JSON.stringify({ asset: { version: '1.0' }, root: null }), '"root" is missing or is not an object'],
+    ['missing bounding volume', JSON.stringify({ asset: { version: '1.0' }, root: {} }), '"root.boundingVolume" is missing or is not an object'],
+    ['null bounding volume', tilesetWith(null), '"root.boundingVolume" is missing or is not an object'],
+    ['null tileset', 'null', 'the file content must be a JSON object'],
+  ])('should reject an invalid tileset json (%s) and report the reason', async function (_case, content, reason) {
     const promise = reader.readModelPolygon(await write('tileset.json', content));
 
     await expect(promise).rejects.toThrow(AppError);
-    await expect(promise).rejects.toThrow(ERROR_TILESET_INVALID);
+    await expect(promise).rejects.toThrow(`${ERROR_TILESET_INVALID}: ${reason}`);
   });
 
   it.each([
     ['a box', { box: [0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1] }, ERROR_BOX_TILESET],
     ['an unknown', { other: [1] }, ERROR_BAD_FORMAT_TILESET],
-    ['a broken region', { region: 'not an array' }, ERROR_TILESET_INVALID],
+    ['a broken region', { region: 'not an array' }, `${ERROR_TILESET_INVALID}: could not calculate the model polygon from root.boundingVolume`],
   ])('should reject %s bounding volume', async function (_case, boundingVolume, message) {
     await expect(reader.readModelPolygon(await write('tileset.json', tilesetWith(boundingVolume)))).rejects.toThrow(message);
   });
@@ -145,7 +146,7 @@ describe('TilesetReader', function () {
   });
 
   it.each([
-    ['is not valid json', 'not json', ERROR_TILESET_INVALID],
+    ['is not valid json', 'not json', `${ERROR_TILESET_INVALID}: the file is not valid JSON`],
     ['has a box bounding volume', tilesetWith({ box: [0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1] }), ERROR_BOX_TILESET],
   ])('should reject a .3tz whose tileset %s', async function (_case, content, message) {
     await expect(reader.readModelPolygon(await writeArchive([['tileset.json', content]]))).rejects.toThrow(message);

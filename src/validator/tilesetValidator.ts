@@ -6,8 +6,6 @@ import { ValidationIssueSeverity, ValidationOptions, Validators, type Validation
 import { AppError, type LogContext } from '@map-colonies/3d-shared';
 import { SERVICES } from '@common/constants';
 
-const MAX_REPORTED_ISSUES = 3;
-
 interface IssueDetails {
   type: string;
   message: string;
@@ -37,9 +35,9 @@ export class TilesetValidator {
     try {
       ({ issues } = await Validators.validateTilesetFile(modelPath, this.validationOptions));
     } catch (err) {
-      const message = `${ERROR_TILESET_VALIDATION_FAILED} for ${fileName}: the validator could not read the file`;
+      const message = `${ERROR_TILESET_VALIDATION_FAILED} for ${fileName}: an unexpected error occurred while running the validator`;
       this.logger.error({ msg: message, logContext, modelPath, err });
-      throw new AppError('badRequest', StatusCodes.BAD_REQUEST, message, true);
+      throw new AppError('tileset-validator', StatusCodes.INTERNAL_SERVER_ERROR, message, true);
     }
 
     const errors = this.toDetails(issues, ValidationIssueSeverity.ERROR, modelPath);
@@ -48,11 +46,7 @@ export class TilesetValidator {
       this.logger.warn({ msg: 'tileset validation warnings', logContext, modelPath, warnings });
     }
     if (errors.length > 0) {
-      const problems = this.summarize(errors);
-      const reported = problems.slice(0, MAX_REPORTED_ISSUES).join('; ');
-      const hidden = problems.length - MAX_REPORTED_ISSUES;
-
-      const message = `${ERROR_TILESET_VALIDATION_FAILED} for ${fileName}: ${reported}${hidden > 0 ? `; and ${hidden} more` : ''}`;
+      const message = `${ERROR_TILESET_VALIDATION_FAILED} for ${fileName}: ${this.summarize(errors).join('; ')}`;
       this.logger.error({ msg: message, logContext, modelPath, errorsCount: errors.length, errors });
       throw new AppError('badRequest', StatusCodes.BAD_REQUEST, message, true);
     }

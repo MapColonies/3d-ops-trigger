@@ -94,12 +94,17 @@ describe('TilesetValidator', function () {
     );
   });
 
-  it('should report at most 3 problems and how many more there are', async function () {
+  it('should report every problem without truncating the list', async function () {
     const root = { boundingVolume: validTileset.root.boundingVolume, geometricError: 'y', refine: 'z' };
     const broken = { geometricError: 'x', extensionsUsed: ['vendorExtent'], extensions: { vendorExtent: 'x' }, root };
-    const promise = validator.validate(await write('tileset.json', JSON.stringify(broken)));
+    const path = await write('tileset.json', JSON.stringify(broken));
+    const { message } = await validator.validate(path).then(
+      () => expect.fail('expected the validation to fail'),
+      (err: unknown) => err as AppError
+    );
 
-    await expect(promise).rejects.toThrow(/; and 1 more$/);
+    expect(message.split('; ')).toHaveLength(4);
+    expect(message).not.toMatch(/more$/);
   });
 
   it('should reject a tileset with an extension that is not an object and point to it', async function () {
@@ -132,27 +137,33 @@ describe('TilesetValidator', function () {
     await expect(promise).rejects.not.toThrow('(at model.3tz)');
   });
 
-  it('should reject a .3tz that is not a zip archive without exposing its folder', async function () {
+  it('should reject a .3tz that is not a zip archive with 400 without exposing its folder', async function () {
     const promise = validator.validate(await write('model.3tz', 'not a zip'));
 
     await expect(promise).rejects.toThrow(AppError);
+    await expect(promise).rejects.toMatchObject({ status: StatusCodes.BAD_REQUEST });
     await expect(promise).rejects.toThrow(`${ERROR_TILESET_VALIDATION_FAILED} for model.3tz: IO_ERROR`);
     await expect(promise).rejects.not.toThrow(folder);
   });
 
-  it('should reject a missing tileset file', async function () {
+  // a missing file is rejected with 400 by FilesValidator before this validator runs,
+  // so a file that is gone at this point is a server-side problem
+  it('should reject with 500 when the tileset file is gone', async function () {
     const promise = validator.validate(join(folder, 'tileset.json'));
 
     await expect(promise).rejects.toThrow(AppError);
+    await expect(promise).rejects.toMatchObject({ status: StatusCodes.INTERNAL_SERVER_ERROR });
     await expect(promise).rejects.toThrow(`${ERROR_TILESET_VALIDATION_FAILED} for tileset.json`);
   });
 
-  it('should reject with 400 when the validator itself fails', async function () {
+  it('should reject with 500 when the validator itself fails', async function () {
     vi.spyOn(Validators, 'validateTilesetFile').mockRejectedValue(new Error('boom'));
     const promise = validator.validate(join(FIXTURE_DATA, 'tileset.json'));
 
     await expect(promise).rejects.toThrow(AppError);
-    await expect(promise).rejects.toMatchObject({ status: StatusCodes.BAD_REQUEST });
-    await expect(promise).rejects.toThrow(`${ERROR_TILESET_VALIDATION_FAILED} for tileset.json: the validator could not read the file`);
+    await expect(promise).rejects.toMatchObject({ status: StatusCodes.INTERNAL_SERVER_ERROR });
+    await expect(promise).rejects.toThrow(
+      `${ERROR_TILESET_VALIDATION_FAILED} for tileset.json: an unexpected error occurred while running the validator`
+    );
   });
 });
