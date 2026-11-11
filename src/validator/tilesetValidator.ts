@@ -38,7 +38,8 @@ export class TilesetValidator {
       throw new AppError('tileset-validator', StatusCodes.INTERNAL_SERVER_ERROR, message, true);
     }
 
-    const errors = [...(await this.checkAssetVersion(modelPath)), ...this.toDetails(issues, ValidationIssueSeverity.ERROR, modelPath)];
+    const specErrors = this.toDetails(issues, ValidationIssueSeverity.ERROR, modelPath);
+    const errors = [...(await this.checkAssetVersion(modelPath, specErrors)), ...specErrors];
     const warnings = this.toDetails(issues, ValidationIssueSeverity.WARNING, modelPath);
     if (warnings.length > 0) {
       this.logger.warn({ msg: 'tileset validation warnings', logContext, modelPath, warnings });
@@ -51,17 +52,12 @@ export class TilesetValidator {
 
     this.logger.info({ msg: 'tileset validated successfully', logContext, modelPath });
   }
-
-  private async checkAssetVersion(modelPath: string): Promise<IssueDetails[]> {
-    let version: unknown;
-    try {
-      const tileset = JSON.parse(await this.tilesetReader.readContent(modelPath)) as { asset?: { version?: unknown } } | null;
-      version = tileset?.asset?.version;
-    } catch {
-      // an unreadable or malformed tileset is already reported by 3d-tiles-validator
+  private async checkAssetVersion(modelPath: string, specErrors: IssueDetails[]): Promise<IssueDetails[]> {
+    if (specErrors.some(({ path }) => path === '')) {
       return [];
     }
-    // a missing or non-string version is already reported by 3d-tiles-validator
+    const tileset = (await this.tilesetReader.readTileset(modelPath)) as { asset?: { version?: unknown } } | null;
+    const version = tileset?.asset?.version;
     if (typeof version !== 'string' || this.isSupportedVersion(version)) {
       return [];
     }

@@ -2,6 +2,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { jsLogger } from '@map-colonies/js-logger';
+import { StatusCodes } from 'http-status-codes';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { TilesetTarget3tz } from '3d-tiles-tools';
 import { AppError, ERROR_BAD_FORMAT_TILESET, ERROR_BOX_TILESET } from '@map-colonies/3d-shared';
@@ -74,6 +75,17 @@ describe('TilesetReader', function () {
     const path = await write('tileset.json', tilesetWithAsset({ version: '0.0' }));
 
     await expect(reader.readModelPolygon(path)).resolves.toMatchObject({ type: 'Polygon' });
+  });
+
+  it.each([
+    ['tileset.json', async (): Promise<string> => write('tileset.json', 'not json')],
+    ['.3tz', async (): Promise<string> => writeArchive([['tileset.json', 'not json'], tile])],
+  ])('should reject with 400 a %s that is not valid json', async function (_case, path) {
+    const promise = reader.readModelPolygon(await path());
+
+    await expect(promise).rejects.toThrow(AppError);
+    await expect(promise).rejects.toMatchObject({ status: StatusCodes.BAD_REQUEST });
+    await expect(promise).rejects.toThrow(`${ERROR_TILESET_INVALID}: the file is not valid JSON`);
   });
 
   it.each([

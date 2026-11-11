@@ -15,6 +15,7 @@ const FIXTURE_DATA = join(__dirname, '../../fixtures/ingestion/paris/data');
 
 describe('TilesetValidator', function () {
   let logger: Logger;
+  let reader: TilesetReader;
   let validator: TilesetValidator;
   let folder: string;
   let validTileset: { asset: unknown; geometricError: number; root: { boundingVolume: unknown; geometricError: number } };
@@ -40,7 +41,8 @@ describe('TilesetValidator', function () {
 
   beforeEach(async function () {
     logger = await jsLogger({ enabled: false });
-    validator = new TilesetValidator(logger, new TilesetReader(logger));
+    reader = new TilesetReader(logger);
+    validator = new TilesetValidator(logger, reader);
     folder = await mkdtemp(join(tmpdir(), 'ops-trigger-validator-'));
     validTileset = JSON.parse(await readFile(join(FIXTURE_DATA, 'tileset.json'), 'utf-8')) as typeof validTileset;
   });
@@ -208,6 +210,28 @@ describe('TilesetValidator', function () {
     await expect(promise).rejects.toMatchObject({ status: StatusCodes.BAD_REQUEST });
     await expect(promise).rejects.toThrow(`${ERROR_TILESET_VALIDATION_FAILED} for model.3tz: IO_ERROR`);
     await expect(promise).rejects.not.toThrow(folder);
+  });
+
+  it.each([
+    ['tileset.json that is not valid json', async (): Promise<string> => write('tileset.json', '{ "asset": ')],
+    ['.3tz that is not a zip archive', async (): Promise<string> => write('model.3tz', 'not a zip')],
+  ])('should log a %s only once, from the validator', async function (_case, path) {
+    const error = vi.spyOn(logger, 'error');
+
+    await expect(validator.validate(await path())).rejects.toMatchObject({ status: StatusCodes.BAD_REQUEST });
+    expect(error).toHaveBeenCalledOnce();
+
+    const [[logged]] = error.mock.calls as [[{ logContext: { class: string } }]];
+
+    expect(logged.logContext.class).toBe(TilesetValidator.name);
+  });
+
+  it('should not skip the asset.version check when reading the tileset fails unexpectedly', async function () {
+    vi.spyOn(reader, 'readTileset').mockRejectedValue(
+      new AppError('badRequest', StatusCodes.BAD_REQUEST, 'tileset.json: tileset is unreadable', true)
+    );
+
+    await expect(validator.validate(join(FIXTURE_DATA, 'tileset.json'))).rejects.toThrow('tileset.json: tileset is unreadable');
   });
 
   it('should reject with 500 when the validator itself fails', async function () {

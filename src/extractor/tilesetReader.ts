@@ -38,7 +38,7 @@ export class TilesetReader {
     const logContext = { ...this.logContext, function: this.readModelPolygon.name };
     this.logger.info({ msg: 'reading model polygon from tileset', logContext, modelPath });
 
-    const tileset = JSON.parse(await this.readContent(modelPath)) as TileSetJson;
+    const tileset = (await this.readTileset(modelPath)) as TileSetJson;
 
     try {
       const modelPolygon = calculatePolygonFromTileset(tileset);
@@ -51,8 +51,15 @@ export class TilesetReader {
     }
   }
 
-  public async readContent(modelPath: string): Promise<string> {
-    return extname(modelPath).toLowerCase() === ARCHIVE_EXTENSION ? this.readFromArchive(modelPath) : this.readFromFile(modelPath);
+  public async readTileset(modelPath: string): Promise<unknown> {
+    const logContext = { ...this.logContext, function: this.readTileset.name };
+    const content =
+      extname(modelPath).toLowerCase() === ARCHIVE_EXTENSION ? await this.readFromArchive(modelPath) : await this.readFromFile(modelPath);
+    try {
+      return JSON.parse(content) as unknown;
+    } catch (err) {
+      this.reject(logContext, `${ERROR_TILESET_INVALID}: the file is not valid JSON`, { modelPath, err });
+    }
   }
 
   private async readFromFile(modelPath: string): Promise<string> {
