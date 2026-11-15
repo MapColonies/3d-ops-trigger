@@ -52,6 +52,7 @@ export class TilesetValidator {
 
     this.logger.info({ msg: 'tileset validated successfully', logContext, modelPath });
   }
+
   private async checkAssetVersion(modelPath: string, specErrors: IssueDetails[]): Promise<IssueDetails[]> {
     if (specErrors.some(({ path }) => path === '')) {
       return [];
