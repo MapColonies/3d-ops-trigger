@@ -15,3 +15,9 @@ export interface IngestionFiles {
 }
 
 export type ProductIdentity = Pick<ShapeMetadataRow, 'productId' | 'productName'>;
+
+export interface IssueDetails {
+  type: string;
+  message: string;
+  path: string;
+}

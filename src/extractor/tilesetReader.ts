@@ -38,13 +38,7 @@ export class TilesetReader {
     const logContext = { ...this.logContext, function: this.readModelPolygon.name };
     this.logger.info({ msg: 'reading model polygon from tileset', logContext, modelPath });
 
-    let content: string;
-    if (extname(modelPath).toLowerCase() === ARCHIVE_EXTENSION) {
-      content = await this.readFromArchive(modelPath);
-    } else {
-      content = await this.readFromFile(modelPath);
-    }
-    const tileset = this.parseTileset(content, modelPath);
+    const tileset = (await this.readTileset(modelPath)) as TileSetJson;
 
     try {
       const modelPolygon = calculatePolygonFromTileset(tileset);
@@ -52,7 +46,19 @@ export class TilesetReader {
       return modelPolygon;
     } catch (err) {
       const isKnownError = err instanceof Error && [ERROR_BOX_TILESET, ERROR_BAD_FORMAT_TILESET].includes(err.message);
-      this.reject(logContext, isKnownError ? err.message : ERROR_TILESET_INVALID, { modelPath, err });
+      const message = isKnownError ? err.message : `${ERROR_TILESET_INVALID}: could not calculate the model polygon from root.boundingVolume`;
+      this.reject(logContext, message, { modelPath, err });
+    }
+  }
+
+  public async readTileset(modelPath: string): Promise<unknown> {
+    const logContext = { ...this.logContext, function: this.readTileset.name };
+    const content =
+      extname(modelPath).toLowerCase() === ARCHIVE_EXTENSION ? await this.readFromArchive(modelPath) : await this.readFromFile(modelPath);
+    try {
+      return JSON.parse(content) as unknown;
+    } catch (err) {
+      this.reject(logContext, `${ERROR_TILESET_INVALID}: the file is not valid JSON`, { modelPath, err });
     }
   }
 
@@ -86,29 +92,6 @@ export class TilesetReader {
     } finally {
       await source?.close();
     }
-  }
-
-  private parseTileset(content: string, modelPath: string): TileSetJson {
-    const logContext = { ...this.logContext, function: this.parseTileset.name };
-    let tileset: unknown;
-    try {
-      tileset = JSON.parse(content);
-    } catch (err) {
-      this.reject(logContext, ERROR_TILESET_INVALID, { modelPath, err });
-    }
-
-    const { asset, root } = (tileset ?? {}) as { asset?: unknown; root?: { boundingVolume?: unknown } | null };
-    if (
-      typeof asset !== 'object' ||
-      asset === null ||
-      typeof root !== 'object' ||
-      root === null ||
-      typeof root.boundingVolume !== 'object' ||
-      root.boundingVolume === null
-    ) {
-      this.reject(logContext, ERROR_TILESET_INVALID, { modelPath });
-    }
-    return tileset as TileSetJson;
   }
 
   private reject(logContext: LogContext, message: string, details: Record<string, unknown>): never {
