@@ -7,23 +7,36 @@ import type { MetadataExtractor } from '@src/extractor/metadataExtractor';
 import type { ProductReader } from '@src/extractor/productReader';
 import type { TilesetReader } from '@src/extractor/tilesetReader';
 import type { TilesetValidator } from '@src/validator/tilesetValidator';
+import type { JobnikClient } from '@src/externalServices/jobnik/jobnikClient';
 
 describe('RecordManager', function () {
   let manager: RecordManager;
-  let validator: { validateIngestion: ReturnType<typeof vi.fn>; validateFootprint: ReturnType<typeof vi.fn> };
+  let validator: {
+    validateIngestion: ReturnType<typeof vi.fn>;
+    validateFootprint: ReturnType<typeof vi.fn>;
+    validateModelFormatEnabled: ReturnType<typeof vi.fn>;
+  };
+  let jobnikClient: { createIngestionJob: ReturnType<typeof vi.fn> };
   let filesValidator: { validateIngestionFiles: ReturnType<typeof vi.fn> };
   let metadataExtractor: { extract: ReturnType<typeof vi.fn> };
   let productReader: { read: ReturnType<typeof vi.fn> };
   let tilesetReader: { readModelPolygon: ReturnType<typeof vi.fn> };
   let tilesetValidator: { validate: ReturnType<typeof vi.fn> };
 
-  const files = { modelPath: '/models/paris/data/tileset.json', product: { shp: '/models/paris/shape/Product.shp' }, metadata: {} };
-  const extracted = { productId: 'p-1', srsId: '4326' };
+  const files = {
+    modelPath: '/models/paris/data/tileset.json',
+    product: { shp: '/models/paris/shape/Product.shp' },
+    metadata: {},
+    relativePaths: { modelPath: 'paris/data/tileset.json', metadataShapefilePath: 'paris/shape/ShapeMetadata.shp' },
+  };
+  const extracted = { productId: 'p-1', productName: 'paris', srsId: '4326', countries: ['France', 'Germany'], partId: 3 };
+  const jobResponse = { jobId: 'job-1', status: 'PENDING' };
   const footprint = { type: 'Polygon', coordinates: [[[2.33, 48.85]]] };
   const modelPolygon = { type: 'Polygon', coordinates: [[[2.34, 48.86]]] };
 
   beforeEach(async function () {
-    validator = { validateIngestion: vi.fn().mockResolvedValue(undefined), validateFootprint: vi.fn() };
+    validator = { validateIngestion: vi.fn().mockResolvedValue(undefined), validateFootprint: vi.fn(), validateModelFormatEnabled: vi.fn() };
+    jobnikClient = { createIngestionJob: vi.fn().mockResolvedValue(jobResponse) };
     filesValidator = { validateIngestionFiles: vi.fn().mockResolvedValue(files) };
     metadataExtractor = { extract: vi.fn().mockResolvedValue(extracted) };
     productReader = { read: vi.fn().mockResolvedValue(footprint) };
@@ -36,12 +49,13 @@ describe('RecordManager', function () {
       metadataExtractor as unknown as MetadataExtractor,
       productReader as unknown as ProductReader,
       tilesetReader as unknown as TilesetReader,
-      tilesetValidator as unknown as TilesetValidator
+      tilesetValidator as unknown as TilesetValidator,
+      jobnikClient as unknown as JobnikClient
     );
   });
 
   describe('createIngestion', function () {
-    it('should return a job response with a jobId and status', async function () {
+    it('should create the ingestion job and return its id and status', async function () {
       const payload: IngestionPayload = {
         modelPath: 'paris/data/tileset.json',
         productShapefilePath: 'paris/shape/Product.shp',
@@ -49,12 +63,29 @@ describe('RecordManager', function () {
         productType: '3DPhotoRealistic',
         classification: '4',
         region: ['France'],
+        keywords: 'paris',
       };
 
       const result = await manager.createIngestion(payload);
 
-      expect(result.jobId).toBeTypeOf('string');
-      expect(result.status).toBeTypeOf('string');
+      expect(result).toEqual(jobResponse);
+      expect(validator.validateModelFormatEnabled).toHaveBeenCalledWith(payload.modelPath);
+      expect(jobnikClient.createIngestionJob).toHaveBeenCalledWith({
+        modelId: expect.stringMatching(/^[0-9a-f-]{36}$/) as unknown,
+        productId: 'p-1',
+        productName: 'paris',
+        modelPath: 'paris/data/tileset.json',
+        metadataShapefilePath: 'paris/shape/ShapeMetadata.shp',
+        metadata: expect.objectContaining({
+          productId: 'p-1',
+          srsId: '4326',
+          productType: '3DPhotoRealistic',
+          classification: '4',
+          keywords: 'paris',
+        }) as unknown,
+        footprint,
+        region: ['France', 'Germany'],
+      });
       expect(filesValidator.validateIngestionFiles).toHaveBeenCalledWith(payload);
       expect(productReader.read).toHaveBeenCalledWith(files.product.shp);
       expect(metadataExtractor.extract).toHaveBeenCalledWith(files);
@@ -131,6 +162,40 @@ describe('RecordManager', function () {
         })
       ).rejects.toThrow('low coverage');
       expect(validator.validateIngestion).not.toHaveBeenCalled();
+    });
+
+    it('should not create a job when the ingestion validation fails', async function () {
+      validator.validateIngestion.mockRejectedValue(new Error('product id is not unique!'));
+
+      await expect(
+        manager.createIngestion({
+          modelPath: 'paris/data/tileset.json',
+          productShapefilePath: 'paris/shape/Product.shp',
+          metadataShapefilePath: 'paris/shape/ShapeMetadata.shp',
+          productType: '3DPhotoRealistic',
+          classification: '4',
+          region: ['France'],
+        })
+      ).rejects.toThrow('product id is not unique!');
+      expect(jobnikClient.createIngestionJob).not.toHaveBeenCalled();
+    });
+
+    it('should reject a disabled model format before touching any file', async function () {
+      validator.validateModelFormatEnabled.mockImplementation(() => {
+        throw new Error('.3tz models are not supported in this environment');
+      });
+
+      await expect(
+        manager.createIngestion({
+          modelPath: 'paris/data/model.3tz',
+          productShapefilePath: 'paris/shape/Product.shp',
+          metadataShapefilePath: 'paris/shape/ShapeMetadata.shp',
+          productType: '3DPhotoRealistic',
+          classification: '4',
+          region: ['France'],
+        })
+      ).rejects.toThrow('.3tz models are not supported in this environment');
+      expect(filesValidator.validateIngestionFiles).not.toHaveBeenCalled();
     });
 
     it('should not extract metadata when the files are invalid', async function () {

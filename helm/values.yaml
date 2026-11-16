@@ -99,6 +99,16 @@ env:
     url:
   extractable:
     url:
+  jobnik:
+    url:
+    ingestion:
+      stages:
+        validation:
+          enabled:
+        uploadModelParts:
+          enabled:
+        extraction:
+          enabled:
 
 telemetry:
   logger:

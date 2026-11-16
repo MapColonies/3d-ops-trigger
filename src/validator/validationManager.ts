@@ -1,3 +1,4 @@
+import { extname } from 'node:path';
 import type { Logger } from '@map-colonies/js-logger';
 import { StatusCodes } from 'http-status-codes';
 import { inject, injectable } from 'tsyringe';
@@ -7,9 +8,10 @@ import { area, feature, featureCollection, intersect, union } from '@turf/turf';
 import type { MultiPolygon, Polygon } from 'geojson';
 import { SERVICES } from '@common/constants';
 import type { ConfigType } from '@common/config';
-import { ERROR_FOOTPRINT_COVERAGE_FAILED, ERROR_FOOTPRINT_FAR_FROM_MODEL } from '../extractor/constants';
+import { ARCHIVE_EXTENSION, ERROR_FOOTPRINT_COVERAGE_FAILED, ERROR_FOOTPRINT_FAR_FROM_MODEL } from '../extractor/constants';
 import { LookupTablesClient } from '../externalServices/lookupTables/lookupTablesClient';
 import { CatalogClient } from '../externalServices/catalog/catalogClient';
+import { JobnikClient } from '../externalServices/jobnik/jobnikClient';
 import type { ProductIdentity } from './interfaces';
 
 const FULL_COVERAGE_PERCENT = 100;
@@ -17,19 +19,24 @@ const COVERAGE_DECIMALS = 2;
 
 export const ERROR_METADATA_PRODUCT_NAME_UNIQUE = 'product name is not unique!';
 export const ERROR_METADATA_PRODUCT_ID_UNIQUE = 'product id is not unique!';
+export const ERROR_JOB_IN_FLIGHT = 'an ingestion job for this product is already in progress';
+export const ERROR_3TZ_DISABLED = '.3tz models are not supported in this environment';
 
 @injectable()
 export class ValidationManager {
   private readonly logContext: LogContext;
   private readonly intersectionPercentageLimit: number;
+  private readonly isExtractionEnabled: boolean;
 
   public constructor(
     @inject(SERVICES.CONFIG) config: ConfigType,
     @inject(SERVICES.LOGGER) private readonly logger: Logger,
     @inject(LookupTablesClient) private readonly lookupTablesClient: LookupTablesClient,
-    @inject(CatalogClient) private readonly catalogClient: CatalogClient
+    @inject(CatalogClient) private readonly catalogClient: CatalogClient,
+    @inject(JobnikClient) private readonly jobnikClient: JobnikClient
   ) {
     this.intersectionPercentageLimit = config.get('validation.intersectionPercentageLimit');
+    this.isExtractionEnabled = config.get('jobnik.ingestion.stages.extraction.enabled');
     this.logContext = {
       fileName: __filename,
       class: ValidationManager.name,
@@ -52,10 +59,19 @@ export class ValidationManager {
       this.validateRegion(parsed.data.region),
       this.validateProductIdUnique(product.productId),
       this.validateProductNameUnique(product.productName),
+      this.validateNoInFlightJob(product),
     ]);
     const failure = results.find((result): result is PromiseRejectedResult => result.status === 'rejected');
     if (failure) {
       throw failure.reason as Error;
+    }
+  }
+
+  public validateModelFormatEnabled(modelPath: string): void {
+    const logContext = { ...this.logContext, function: this.validateModelFormatEnabled.name };
+    if (extname(modelPath).toLowerCase() === ARCHIVE_EXTENSION && !this.isExtractionEnabled) {
+      this.logger.error({ msg: ERROR_3TZ_DISABLED, logContext, modelPath });
+      throw new AppError('badRequest', StatusCodes.BAD_REQUEST, ERROR_3TZ_DISABLED, true);
     }
   }
 
@@ -139,6 +155,14 @@ export class ValidationManager {
         existingRecordIds: records.map((record) => record.id),
       });
       throw new AppError('badRequest', StatusCodes.BAD_REQUEST, ERROR_METADATA_PRODUCT_NAME_UNIQUE, true);
+    }
+  }
+
+  private async validateNoInFlightJob(product: ProductIdentity): Promise<void> {
+    const logContext = { ...this.logContext, function: this.validateNoInFlightJob.name };
+    if (await this.jobnikClient.hasInFlightIngestionJob(product)) {
+      this.logger.error({ msg: ERROR_JOB_IN_FLIGHT, logContext, ...product });
+      throw new AppError('badRequest', StatusCodes.BAD_REQUEST, ERROR_JOB_IN_FLIGHT, true);
     }
   }
 

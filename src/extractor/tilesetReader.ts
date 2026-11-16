@@ -5,14 +5,8 @@ import type { Logger } from '@map-colonies/js-logger';
 import { StatusCodes } from 'http-status-codes';
 import { inject, injectable } from 'tsyringe';
 import { TilesetError, TilesetSources, type TilesetSource } from '3d-tiles-tools';
-import {
-  AppError,
-  calculatePolygonFromTileset,
-  ERROR_BAD_FORMAT_TILESET,
-  ERROR_BOX_TILESET,
-  type LogContext,
-  type TileSetJson,
-} from '@map-colonies/3d-shared';
+import { AppError, type LogContext, type TileSetJson } from '@map-colonies/3d-shared';
+import { calculatePolygonFromTileset, ERROR_BAD_FORMAT_TILESET, ERROR_BOX_TILESET } from '@map-colonies/3d-shared/tileset';
 import { SERVICES } from '@common/constants';
 import {
   ARCHIVE_EXTENSION,

@@ -19,6 +19,23 @@ interface ValidationConfig {
   intersectionPercentageLimit: number;
 }
 
+interface StageFlagConfig {
+  enabled: boolean;
+}
+
+interface IngestionStagesConfig {
+  validation: StageFlagConfig;
+  uploadModelParts: StageFlagConfig;
+  extraction: StageFlagConfig;
+}
+
+interface JobnikConfig {
+  url: string;
+  ingestion: {
+    stages: IngestionStagesConfig;
+  };
+}
+
 interface ExternalServicesConfig {
   catalogUrl: string;
   extractableUrl: string;
@@ -27,12 +44,21 @@ interface ExternalServicesConfig {
 
 type OpsTriggerConfigType = commonBoilerplateV3Type & {
   externalServices: ExternalServicesConfig;
+  jobnik: JobnikConfig;
   paths: PathsConfig;
   productReader: ProductReaderConfig;
   validation: ValidationConfig;
 };
 
 type ConfigType = ConfigInstance<OpsTriggerConfigType>;
+
+const stageFlagSchema = {
+  type: 'object',
+  required: ['enabled'],
+  properties: {
+    enabled: { type: 'boolean' },
+  },
+};
 
 const opsTriggerConfigSchema = {
   $id: 'https://mapcolonies.com/3d/opsTrigger/v1',
@@ -41,8 +67,30 @@ const opsTriggerConfigSchema = {
     { $ref: commonBoilerplateV3.$id },
     {
       type: 'object',
-      required: ['externalServices', 'paths', 'productReader', 'validation'],
+      required: ['externalServices', 'jobnik', 'paths', 'productReader', 'validation'],
       properties: {
+        jobnik: {
+          type: 'object',
+          required: ['url', 'ingestion'],
+          properties: {
+            url: { type: 'string', minLength: 1 },
+            ingestion: {
+              type: 'object',
+              required: ['stages'],
+              properties: {
+                stages: {
+                  type: 'object',
+                  required: ['validation', 'uploadModelParts', 'extraction'],
+                  properties: {
+                    validation: stageFlagSchema,
+                    uploadModelParts: stageFlagSchema,
+                    extraction: stageFlagSchema,
+                  },
+                },
+              },
+            },
+          },
+        },
         paths: {
           type: 'object',
           required: ['basePath', 'pvPath'],
@@ -103,4 +151,13 @@ function getConfig(): ConfigType {
 }
 
 export { getConfig, initConfig };
-export type { ConfigType, LookupTablesConfig, ExternalServicesConfig, PathsConfig, ProductReaderConfig, ValidationConfig };
+export type {
+  ConfigType,
+  LookupTablesConfig,
+  ExternalServicesConfig,
+  IngestionStagesConfig,
+  JobnikConfig,
+  PathsConfig,
+  ProductReaderConfig,
+  ValidationConfig,
+};
