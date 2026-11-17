@@ -1,14 +1,17 @@
 import { jsLogger } from '@map-colonies/js-logger';
-import { describe, it, expect, beforeAll, afterEach } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest';
 import nock from 'nock';
 import { trace } from '@opentelemetry/api';
 import httpStatusCodes from 'http-status-codes';
 import { createRequestSender, type RequestSender } from '@map-colonies/openapi-supertest';
+import { insertRecordTaskSchema, planUploadTaskSchema } from '@map-colonies/3d-shared';
 import type { paths, operations } from '@openapi';
 import { getApp } from '@src/app';
 import { SERVICES } from '@common/constants';
 import { getConfig, initConfig, type LookupTablesConfig } from '@src/common/config';
 import type { IngestionPayload } from '@src/record/models/recordManager';
+import { ERROR_3TZ_DISABLED } from '@src/validator/validationManager';
+import { startFakeJobnik, type FakeJobnik } from '@tests/helpers/fakeJobnik';
 
 const ingestionPayload: IngestionPayload = {
   modelPath: '\\\\domtest\\models\\paris\\data\\tileset.json',
@@ -21,6 +24,7 @@ const ingestionPayload: IngestionPayload = {
 
 let lookupTables: LookupTablesConfig;
 let catalogUrl: string;
+let jobnik: FakeJobnik;
 
 const mockLookupTables = (): void => {
   nock(lookupTables.url)
@@ -39,6 +43,8 @@ describe('record', function () {
   let requestSender: RequestSender<paths, operations>;
 
   beforeAll(async function () {
+    jobnik = await startFakeJobnik();
+    process.env.JOBNIK_URL = jobnik.url;
     await initConfig(true);
     lookupTables = getConfig().get('externalServices.lookupTables');
     catalogUrl = getConfig().get('externalServices.catalogUrl');
@@ -58,22 +64,41 @@ describe('record', function () {
 
   afterEach(function () {
     nock.cleanAll();
+    jobnik.reset();
+  });
+
+  afterAll(async function () {
+    delete process.env.JOBNIK_URL;
+    await jobnik.close();
   });
 
   describe('POST /record', function () {
     describe('Happy Path 🙂', function () {
-      it.each([
-        ['a tileset.json model', '\\\\domtest\\models\\paris\\data\\tileset.json'],
-        ['a .3tz model', '\\\\domtest\\models\\paris\\data\\model.3tz'],
-      ])('should return 201 and a job response for %s', async function (_case, modelPath) {
+      it('should return 201 and create the Jobnik ingestion job for a tileset.json model', async function () {
         mockLookupTables();
         mockCatalogFind();
 
-        const response = await requestSender.createRecord({ requestBody: { ...ingestionPayload, modelPath } });
+        const response = await requestSender.createRecord({ requestBody: ingestionPayload });
 
         expect(response).toSatisfyApiSpec();
         expect(response.status).toBe(httpStatusCodes.CREATED);
-        expect(response.body).toMatchObject({ status: 'PENDING' });
+        expect(response.body).toEqual({ jobId: 'job-1', status: 'PENDING' });
+
+        const { calls } = jobnik;
+
+        expect(calls.job?.name).toBe('3D-Ingestion');
+        expect(calls.stages).toEqual(['validate-shapefiles', 'plan-upload', 'upload-files', 'insert-parts', 'insert-record']);
+        expect(calls.tasks.map((task) => task.stageId)).toEqual(['stage-5', 'stage-4', 'stage-2', 'stage-1']);
+
+        const modelId = calls.job?.data.modelId;
+        const [insertRecord, insertParts, planUpload, validateShapefiles] = calls.tasks.map((task) => task.data);
+
+        expect(validateShapefiles).toEqual({ modelId, metadataShapefilePath: 'paris/shape/ShapeMetadata.shp' });
+        expect(planUpload).toEqual({ sourceDir: 'paris/data', s3KeyPrefix: modelId });
+        expect(insertParts).toEqual({ modelId, metadataShapefilePath: 'paris/shape/ShapeMetadata.shp', productVersion: 1 });
+        expect(insertRecord).toMatchObject({ modelId, tilesetFilename: 'tileset.json', region: ['France'] });
+        expect(planUploadTaskSchema.safeParse(planUpload).success).toBe(true);
+        expect(insertRecordTaskSchema.safeParse(insertRecord).error).toBeUndefined();
       });
     });
 
@@ -162,6 +187,28 @@ describe('record', function () {
         expect(response).toSatisfyApiSpec();
         expect(response.status).toBe(httpStatusCodes.BAD_REQUEST);
         expect(response.body).toHaveProperty('message', 'product id is not unique!');
+      });
+
+      it('should return 400 for a .3tz model while extraction is disabled', async function () {
+        const response = await requestSender.createRecord({
+          requestBody: { ...ingestionPayload, modelPath: '\\\\domtest\\models\\paris\\data\\model.3tz' },
+        });
+
+        expect(response).toSatisfyApiSpec();
+        expect(response.status).toBe(httpStatusCodes.BAD_REQUEST);
+        expect(response.body).toHaveProperty('message', ERROR_3TZ_DISABLED);
+      });
+
+      it('should return 400 when an ingestion job for the product is already running', async function () {
+        mockLookupTables();
+        mockCatalogFind();
+        jobnik.reset([{ id: 'job-0', status: 'IN_PROGRESS', data: { productId: 'other', productName: 'paris' } }]);
+
+        const response = await requestSender.createRecord({ requestBody: ingestionPayload });
+
+        expect(response).toSatisfyApiSpec();
+        expect(response.status).toBe(httpStatusCodes.BAD_REQUEST);
+        expect(jobnik.calls.job).toBeUndefined();
       });
     });
 

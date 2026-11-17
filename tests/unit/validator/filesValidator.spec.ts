@@ -64,6 +64,7 @@ describe('FilesValidator', function () {
       cpg: join(pvPath, 'paris/shape/Product.cpg'),
     });
     expect(files.metadata.dbf).toBe(join(pvPath, 'paris/shape/ShapeMetadata.dbf'));
+    expect(files.relativePaths).toEqual({ modelPath: 'paris/data/tileset.json', metadataShapefilePath: 'paris/shape/ShapeMetadata.shp' });
   });
 
   it('should accept share paths written with forward slashes', async function () {

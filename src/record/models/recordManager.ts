@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { Logger } from '@map-colonies/js-logger';
 import { inject, injectable } from 'tsyringe';
 import type { LogContext } from '@map-colonies/3d-shared';
@@ -9,6 +10,8 @@ import { TilesetValidator } from '../../validator/tilesetValidator';
 import { MetadataExtractor } from '../../extractor/metadataExtractor';
 import { ProductReader } from '../../extractor/productReader';
 import { TilesetReader } from '../../extractor/tilesetReader';
+import { JobnikClient } from '../../externalServices/jobnik/jobnikClient';
+import { toRecordMetadata, toRegion } from './recordMetadata';
 
 export type IngestionPayload = components['schemas']['ingestionPayload'];
 export type UpdatePayload = components['schemas']['updatePayload'];
@@ -27,7 +30,8 @@ export class RecordManager {
     @inject(MetadataExtractor) private readonly metadataExtractor: MetadataExtractor,
     @inject(ProductReader) private readonly productReader: ProductReader,
     @inject(TilesetReader) private readonly tilesetReader: TilesetReader,
-    @inject(TilesetValidator) private readonly tilesetValidator: TilesetValidator
+    @inject(TilesetValidator) private readonly tilesetValidator: TilesetValidator,
+    @inject(JobnikClient) private readonly jobnikClient: JobnikClient
   ) {
     this.logContext = {
       fileName: __filename,
@@ -38,6 +42,7 @@ export class RecordManager {
   public async createIngestion(payload: IngestionPayload): Promise<JobResponse> {
     const logContext = { ...this.logContext, function: this.createIngestion.name };
     this.logger.info({ msg: 'creating ingestion job', logContext, modelPath: payload.modelPath });
+    this.validator.validateModelFormatEnabled(payload.modelPath);
     const files = await this.filesValidator.validateIngestionFiles(payload);
     await this.tilesetValidator.validate(files.modelPath);
 
@@ -47,7 +52,17 @@ export class RecordManager {
 
     this.validator.validateFootprint(footprint, modelPolygon);
     await this.validator.validateIngestion(payload, metadata);
-    return { jobId: 'stub-ingestion-job-id', status: 'PENDING' };
+
+    return this.jobnikClient.createIngestionJob({
+      modelId: randomUUID(),
+      productId: metadata.productId,
+      productName: metadata.productName,
+      modelPath: files.relativePaths.modelPath,
+      metadataShapefilePath: files.relativePaths.metadataShapefilePath,
+      metadata: toRecordMetadata(metadata, payload),
+      footprint,
+      region: toRegion(metadata, payload),
+    });
   }
 
   public deleteRecord(id: string): JobResponse {

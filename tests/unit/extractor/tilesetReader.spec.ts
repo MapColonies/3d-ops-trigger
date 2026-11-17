@@ -5,7 +5,8 @@ import { jsLogger } from '@map-colonies/js-logger';
 import { StatusCodes } from 'http-status-codes';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { TilesetTarget3tz } from '3d-tiles-tools';
-import { AppError, ERROR_BAD_FORMAT_TILESET, ERROR_BOX_TILESET } from '@map-colonies/3d-shared';
+import { AppError } from '@map-colonies/3d-shared';
+import { ERROR_BAD_FORMAT_TILESET, ERROR_BOX_TILESET } from '@map-colonies/3d-shared/tileset';
 import { TilesetReader } from '@src/extractor/tilesetReader';
 import { ERROR_3TZ_INVALID, ERROR_3TZ_INVALID_PREFIX, ERROR_TILESET_INVALID, ERROR_TILESET_NOT_IN_ARCHIVE } from '@src/extractor/constants';
 
