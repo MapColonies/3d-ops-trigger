@@ -24,8 +24,6 @@ interface StageFlagConfig {
 }
 
 interface IngestionStagesConfig {
-  validation: StageFlagConfig;
-  uploadModelParts: StageFlagConfig;
   extraction: StageFlagConfig;
 }
 
@@ -80,10 +78,8 @@ const opsTriggerConfigSchema = {
               properties: {
                 stages: {
                   type: 'object',
-                  required: ['validation', 'uploadModelParts', 'extraction'],
+                  required: ['extraction'],
                   properties: {
-                    validation: stageFlagSchema,
-                    uploadModelParts: stageFlagSchema,
                     extraction: stageFlagSchema,
                   },
                 },

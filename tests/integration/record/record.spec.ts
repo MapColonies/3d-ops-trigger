@@ -87,15 +87,18 @@ describe('record', function () {
         const { calls } = jobnik;
 
         expect(calls.job?.name).toBe('3D-Ingestion');
-        expect(calls.stages).toEqual(['plan-upload', 'upload-files', 'insert-record']);
-        expect(calls.tasks.map((task) => task.stageId)).toEqual(['stage-3', 'stage-1']);
+        expect(calls.stages).toEqual(['validate-shapefiles', 'plan-upload', 'upload-files', 'insert-parts', 'insert-record']);
+        expect(calls.tasks.map((task) => task.stageId)).toEqual(['stage-5', 'stage-4', 'stage-2', 'stage-1']);
 
         const modelId = calls.job?.data.modelId;
+        const [insertRecord, insertParts, planUpload, validateShapefiles] = calls.tasks.map((task) => task.data);
 
-        expect(calls.tasks[1]?.data).toEqual({ sourceDir: 'paris/data', s3KeyPrefix: modelId });
-        expect(calls.tasks[0]?.data).toMatchObject({ modelId, tilesetFilename: 'tileset.json', region: ['France'] });
-        expect(planUploadTaskSchema.safeParse(calls.tasks[1]?.data).success).toBe(true);
-        expect(insertRecordTaskSchema.safeParse(calls.tasks[0]?.data).error).toBeUndefined();
+        expect(validateShapefiles).toEqual({ modelId, metadataShapefilePath: 'paris/shape/ShapeMetadata.shp' });
+        expect(planUpload).toEqual({ sourceDir: 'paris/data', s3KeyPrefix: modelId });
+        expect(insertParts).toEqual({ modelId, metadataShapefilePath: 'paris/shape/ShapeMetadata.shp', productVersion: 1 });
+        expect(insertRecord).toMatchObject({ modelId, tilesetFilename: 'tileset.json', region: ['France'] });
+        expect(planUploadTaskSchema.safeParse(planUpload).success).toBe(true);
+        expect(insertRecordTaskSchema.safeParse(insertRecord).error).toBeUndefined();
       });
     });
 

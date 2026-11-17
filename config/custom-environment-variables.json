@@ -11,18 +11,6 @@
     "url": "JOBNIK_URL",
     "ingestion": {
       "stages": {
-        "validation": {
-          "enabled": {
-            "__name": "JOBNIK_INGESTION_VALIDATION_ENABLED",
-            "__format": "boolean"
-          }
-        },
-        "uploadModelParts": {
-          "enabled": {
-            "__name": "JOBNIK_INGESTION_UPLOAD_MODEL_PARTS_ENABLED",
-            "__format": "boolean"
-          }
-        },
         "extraction": {
           "enabled": {
             "__name": "JOBNIK_INGESTION_EXTRACTION_ENABLED",

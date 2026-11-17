@@ -42,8 +42,6 @@ data:
   {{- with .Values.env.jobnik }}
   JOBNIK_URL: {{ required "env.jobnik.url is required" .url | quote }}
   {{- with .ingestion.stages }}
-  JOBNIK_INGESTION_VALIDATION_ENABLED: {{ required "env.jobnik.ingestion.stages.validation.enabled is required" .validation.enabled | quote }}
-  JOBNIK_INGESTION_UPLOAD_MODEL_PARTS_ENABLED: {{ required "env.jobnik.ingestion.stages.uploadModelParts.enabled is required" .uploadModelParts.enabled | quote }}
   JOBNIK_INGESTION_EXTRACTION_ENABLED: {{ required "env.jobnik.ingestion.stages.extraction.enabled is required" .extraction.enabled | quote }}
   {{- end }}
   {{- end }}

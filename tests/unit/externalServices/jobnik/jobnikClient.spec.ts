@@ -15,7 +15,7 @@ import {
   validateShapefilesTaskSchema,
 } from '@map-colonies/3d-shared';
 import type { z } from 'zod';
-import type { ConfigType, IngestionStagesConfig } from '@src/common/config';
+import type { ConfigType } from '@src/common/config';
 import type { IngestionJobInput } from '@src/externalServices/jobnik/interfaces';
 import { ERROR_JOBNIK_CREATE_JOB, ERROR_JOBNIK_IN_FLIGHT_QUERY, JobnikClient } from '@src/externalServices/jobnik/jobnikClient';
 
@@ -86,14 +86,7 @@ const input = (modelPath: string): IngestionJobInput => ({
   region: ['France'],
 });
 
-const flags = (enabled: boolean): IngestionStagesConfig => ({
-  validation: { enabled },
-  uploadModelParts: { enabled },
-  extraction: { enabled },
-});
-
-const configOf = (stages: IngestionStagesConfig): ConfigType =>
-  ({ get: vi.fn((key: string) => (key === 'jobnik.ingestion.stages' ? stages : 'http://jobnik')) }) as unknown as ConfigType;
+const config = { get: vi.fn().mockReturnValue('http://jobnik') } as unknown as ConfigType;
 
 const createdStageTypes = (): string[] => sdkMock.createStage.mock.calls.map((call) => (call[1] as { type: string }).type);
 const taskCalls = (): { stageId: string; type: string; data: unknown }[] =>
@@ -105,8 +98,7 @@ const taskCalls = (): { stageId: string; type: string; data: unknown }[] =>
 const taskOf = (type: string): unknown => taskCalls().find((call) => call.type === type)?.data;
 
 describe('JobnikClient', function () {
-  const create = async (stages: IngestionStagesConfig): Promise<JobnikClient> =>
-    new JobnikClient(configOf(stages), await jsLogger({ enabled: false }), new Registry());
+  const create = async (): Promise<JobnikClient> => new JobnikClient(config, await jsLogger({ enabled: false }), new Registry());
 
   beforeEach(function () {
     vi.clearAllMocks();
@@ -117,17 +109,23 @@ describe('JobnikClient', function () {
   });
 
   describe('createIngestionJob', function () {
-    it('should create only the always-on stages for a tileset when every flag is off', async function () {
-      const client = await create(flags(false));
+    it('should create the five stages of a tileset folder in order', async function () {
+      const client = await create();
 
       const result = await client.createIngestionJob(input('paris/data/tileset.json'));
 
       expect(result).toEqual({ jobId: 'job-1', status: 'PENDING' });
-      expect(createdStageTypes()).toEqual([STAGE_TYPES.planUpload, STAGE_TYPES.uploadFiles, STAGE_TYPES.insertRecord]);
+      expect(createdStageTypes()).toEqual([
+        STAGE_TYPES.validateShapefiles,
+        STAGE_TYPES.planUpload,
+        STAGE_TYPES.uploadFiles,
+        STAGE_TYPES.insertParts,
+        STAGE_TYPES.insertRecord,
+      ]);
     });
 
     it('should create the job with the model and product identity', async function () {
-      const client = await create(flags(false));
+      const client = await create();
 
       await client.createIngestionJob(input('paris/data/tileset.json'));
 
@@ -138,7 +136,7 @@ describe('JobnikClient', function () {
     });
 
     it('should create every stage before any task, and the tasks from the last stage to the first', async function () {
-      const client = await create(flags(true));
+      const client = await create();
 
       await client.createIngestionJob(input('paris/data/model.3tz'));
 
@@ -157,8 +155,8 @@ describe('JobnikClient', function () {
       expect(taskCalls().every((call) => call.stageId === `stage-${call.type}`)).toBe(true);
     });
 
-    it('should create all seven stages in order for a 3tz when every flag is on', async function () {
-      const client = await create(flags(true));
+    it('should create the seven stages of a 3tz in order', async function () {
+      const client = await create();
 
       await client.createIngestionJob(input('paris/data/model.3tz'));
 
@@ -174,7 +172,7 @@ describe('JobnikClient', function () {
     });
 
     it('should create task data that matches the shared task schema of every stage', async function () {
-      const client = await create(flags(true));
+      const client = await create();
 
       await client.createIngestionJob(input('paris/data/model.3tz'));
 
@@ -184,7 +182,7 @@ describe('JobnikClient', function () {
     });
 
     it('should upload the folder of a tileset and keep its file name', async function () {
-      const client = await create(flags(false));
+      const client = await create();
 
       await client.createIngestionJob(input('paris/data/nested/root.json'));
 
@@ -193,7 +191,7 @@ describe('JobnikClient', function () {
     });
 
     it('should extract a 3tz into a temp folder named by the model id, upload it and delete it', async function () {
-      const client = await create(flags(true));
+      const client = await create();
 
       await client.createIngestionJob(input('paris/data/model.3tz'));
 
@@ -204,7 +202,7 @@ describe('JobnikClient', function () {
     });
 
     it('should not create a task for the upload-files stage', async function () {
-      const client = await create(flags(true));
+      const client = await create();
 
       await client.createIngestionJob(input('paris/data/tileset.json'));
 
@@ -213,7 +211,7 @@ describe('JobnikClient', function () {
 
     it('should abort the job and throw 500 when creating a task fails', async function () {
       sdkMock.createTasks.mockRejectedValueOnce(new Error('jobnik down'));
-      const client = await create(flags(false));
+      const client = await create();
 
       const error = await client.createIngestionJob(input('paris/data/tileset.json')).catch((err: unknown) => err);
 
@@ -225,14 +223,14 @@ describe('JobnikClient', function () {
     it('should still throw the creation error when the abort fails too', async function () {
       sdkMock.createStage.mockRejectedValueOnce(new Error('jobnik down'));
       sdkMock.PUT.mockRejectedValueOnce(new Error('abort failed'));
-      const client = await create(flags(false));
+      const client = await create();
 
       await expect(client.createIngestionJob(input('paris/data/tileset.json'))).rejects.toThrow(ERROR_JOBNIK_CREATE_JOB);
     });
 
     it('should not abort when the job itself could not be created', async function () {
       sdkMock.createJob.mockRejectedValueOnce(new Error('jobnik down'));
-      const client = await create(flags(false));
+      const client = await create();
 
       await expect(client.createIngestionJob(input('paris/data/tileset.json'))).rejects.toThrow(ERROR_JOBNIK_CREATE_JOB);
       expect(sdkMock.createStage).not.toHaveBeenCalled();
@@ -246,21 +244,21 @@ describe('JobnikClient', function () {
 
     it.each(['CREATED', 'PENDING', 'IN_PROGRESS', 'PAUSED'])('should find a %s job of the same product id', async function (status) {
       sdkMock.GET.mockResolvedValue({ data: { items: [job(status, { productId: 'p-1', productName: 'other' })] } });
-      const client = await create(flags(false));
+      const client = await create();
 
       await expect(client.hasInFlightIngestionJob(product)).resolves.toBe(true);
     });
 
     it('should find a running job of the same product name', async function () {
       sdkMock.GET.mockResolvedValue({ data: { items: [job('IN_PROGRESS', { productId: 'other', productName: 'paris' })] } });
-      const client = await create(flags(false));
+      const client = await create();
 
       await expect(client.hasInFlightIngestionJob(product)).resolves.toBe(true);
     });
 
     it.each(['COMPLETED', 'FAILED', 'ABORTED'])('should ignore a %s job of the same product', async function (status) {
       sdkMock.GET.mockResolvedValue({ data: { items: [job(status, product)] } });
-      const client = await create(flags(false));
+      const client = await create();
 
       await expect(client.hasInFlightIngestionJob(product)).resolves.toBe(false);
     });
@@ -268,7 +266,7 @@ describe('JobnikClient', function () {
     it('should look through the next pages', async function () {
       const fullPage = Array.from({ length: 100 }, (_, index) => job('IN_PROGRESS', { productId: `p-${index + 2}`, productName: `n-${index}` }));
       sdkMock.GET.mockResolvedValueOnce({ data: { items: fullPage } }).mockResolvedValueOnce({ data: { items: [job('PENDING', product)] } });
-      const client = await create(flags(false));
+      const client = await create();
 
       await expect(client.hasInFlightIngestionJob(product)).resolves.toBe(true);
       expect(sdkMock.GET).toHaveBeenCalledTimes(2);
@@ -277,7 +275,7 @@ describe('JobnikClient', function () {
 
     it('should throw 500 when Jobnik cannot be queried', async function () {
       sdkMock.GET.mockResolvedValue({ error: { message: 'boom' } });
-      const client = await create(flags(false));
+      const client = await create();
 
       await expect(client.hasInFlightIngestionJob(product)).rejects.toThrow(ERROR_JOBNIK_IN_FLIGHT_QUERY);
     });

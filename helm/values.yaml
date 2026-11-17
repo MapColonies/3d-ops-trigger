@@ -103,10 +103,6 @@ env:
     url:
     ingestion:
       stages:
-        validation:
-          enabled:
-        uploadModelParts:
-          enabled:
         extraction:
           enabled:
 

@@ -16,7 +16,7 @@ import {
   type Stages3D,
 } from '@map-colonies/3d-shared';
 import { SERVICES } from '@common/constants';
-import type { ConfigType, IngestionStagesConfig } from '@common/config';
+import type { ConfigType } from '@common/config';
 import { ARCHIVE_EXTENSION, TILESET_FILENAME } from '../../extractor/constants';
 import type { JobResponse } from '../../record/models/recordManager';
 import type { IngestionJobInput, ProductKey, StagePlan } from './interfaces';
@@ -31,14 +31,12 @@ export const ERROR_JOBNIK_IN_FLIGHT_QUERY = 'failed querying Jobnik for in-fligh
 export class JobnikClient {
   private readonly logContext: LogContext;
   private readonly sdk: JobnikSDK<Jobs3D, Stages3D>;
-  private readonly stages: IngestionStagesConfig;
 
   public constructor(
     @inject(SERVICES.CONFIG) config: ConfigType,
     @inject(SERVICES.LOGGER) private readonly logger: Logger,
     @inject(SERVICES.METRICS) metricsRegistry: Registry
   ) {
-    this.stages = config.get('jobnik.ingestion.stages');
     this.sdk = new JobnikSDK<Jobs3D, Stages3D>({ baseUrl: config.get('jobnik.url'), metricsRegistry });
     this.logContext = {
       fileName: __filename,
@@ -121,15 +119,12 @@ export class JobnikClient {
     const tilesetFilename = is3tz ? TILESET_FILENAME : basename(input.modelPath);
 
     const plan: (StagePlan | false)[] = [
-      this.stages.validation.enabled && {
-        type: STAGE_TYPES.validateShapefiles,
-        task: { modelId: input.modelId, metadataShapefilePath: input.metadataShapefilePath },
-      },
+      { type: STAGE_TYPES.validateShapefiles, task: { modelId: input.modelId, metadataShapefilePath: input.metadataShapefilePath } },
       is3tz && { type: STAGE_TYPES.extract3tz, task: { archivePath: input.modelPath, tempDir } },
       { type: STAGE_TYPES.planUpload, task: { sourceDir, s3KeyPrefix: input.modelId } },
       { type: STAGE_TYPES.uploadFiles },
       is3tz && { type: STAGE_TYPES.deleteTempFiles, task: { storageProvider: STORAGE_PROVIDERS.FS, paths: [tempDir] } },
-      this.stages.uploadModelParts.enabled && {
+      {
         type: STAGE_TYPES.insertParts,
         task: { modelId: input.modelId, metadataShapefilePath: input.metadataShapefilePath, productVersion: PRODUCT_VERSION },
       },
