@@ -21,19 +21,19 @@ paths:
             schema:
               $ref: '#/components/schemas/ingestionPayload'
       responses:
-        201:
+        '201':
           description: Ingestion job created
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/jobResponse'
-        400:
+        '400':
           description: Bad Request
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/error'
-        500:
+        '500':
           description: An external service (lookup-tables / catalog) failed
           content:
             application/json:
@@ -49,19 +49,19 @@ paths:
       parameters:
         - $ref: '#/components/parameters/recordId'
       responses:
-        200:
+        '200':
           description: Delete job created
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/jobResponse'
-        400:
+        '400':
           description: Bad Request
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/error'
-        404:
+        '404':
           description: Record not found
           content:
             application/json:
@@ -81,19 +81,19 @@ paths:
             schema:
               $ref: '#/components/schemas/updatePayload'
       responses:
-        200:
+        '200':
           description: Metadata updated
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ackResponse'
-        400:
+        '400':
           description: Bad Request
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/error'
-        404:
+        '404':
           description: Record not found
           content:
             application/json:
@@ -114,19 +114,19 @@ paths:
             schema:
               $ref: '#/components/schemas/statusPayload'
       responses:
-        200:
+        '200':
           description: Status updated
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ackResponse'
-        400:
+        '400':
           description: Bad Request
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/error'
-        404:
+        '404':
           description: Record not found
           content:
             application/json:
@@ -164,18 +164,29 @@ components:
         modelPath:
           type: string
           minLength: 1
-          description: Full share path (must start with the configured base path) to the model inside the data/ folder - a tileset.json (3D Tiles) or a .3tz file (3D Tiles Archive - tileset.json at its root). The model bounding volume (region or sphere) must be covered by the product footprint above the configured intersection percentage
-          example: '\\domtest\models\paris\data\tileset.json'
+          description: >-
+            Full share path (must start with the configured base path) to the
+            model inside the data/ folder - a tileset.json (3D Tiles) or a .3tz
+            file (3D Tiles Archive - tileset.json at its root). The model
+            bounding volume (region or sphere) must be covered by the product
+            footprint above the configured intersection percentage
+          example: \\domtest\models\paris\data\tileset.json
         productShapefilePath:
           type: string
           minLength: 1
-          description: Full share path (must start with the configured base path) to the footprint shapefile (shape/Product.shp). .shx, .dbf, .prj (WGS84) and .cpg (UTF-8) must sit next to it
-          example: '\\domtest\models\paris\shape\Product.shp'
+          description: >-
+            Full share path (must start with the configured base path) to the
+            footprint shapefile (shape/Product.shp). .shx, .dbf, .prj (WGS84)
+            and .cpg (UTF-8) must sit next to it
+          example: \\domtest\models\paris\shape\Product.shp
         metadataShapefilePath:
           type: string
           minLength: 1
-          description: Full share path (must start with the configured base path) to the parts metadata shapefile (shape/ShapeMetadata.shp). .shx, .dbf, .prj (WGS84) and .cpg (UTF-8) must sit next to it
-          example: '\\domtest\models\paris\shape\ShapeMetadata.shp'
+          description: >-
+            Full share path (must start with the configured base path) to the
+            parts metadata shapefile (shape/ShapeMetadata.shp). .shx, .dbf, .prj
+            (WGS84) and .cpg (UTF-8) must sit next to it
+          example: \\domtest\models\paris\shape\ShapeMetadata.shp
         productType:
           type: string
           enum:
@@ -199,7 +210,7 @@ components:
             minLength: 1
         classification:
           type: string
-          pattern: '^[a-zA-Z0-9]+$'
+          pattern: ^[a-zA-Z0-9]+$
         keywords:
           type: string
       additionalProperties: false
