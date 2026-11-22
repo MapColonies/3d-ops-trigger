@@ -39,6 +39,12 @@ data:
   EXTRACTABLE_URL: {{ .Values.env.extractable.url | default (printf "http://%s-extractable" .Release.Name) }}
   LOOKUP_TABLES_URL: {{ .Values.validations.lookupTables.url | quote }}
   LOOKUP_TABLES_SUB_URL: {{ .Values.validations.lookupTables.subUrl | quote }}
+  {{- with .Values.env.jobnik }}
+  JOBNIK_URL: {{ required "env.jobnik.url is required" .url | quote }}
+  {{- with .ingestion.stages }}
+  JOBNIK_INGESTION_EXTRACTION_ENABLED: {{ required "env.jobnik.ingestion.stages.extraction.enabled is required" .extraction.enabled | quote }}
+  {{- end }}
+  {{- end }}
   {{- with .Values.configManagement }}
   CONFIG_NAME: {{ .name | quote }}
   CONFIG_VERSION: {{ .version | quote }}

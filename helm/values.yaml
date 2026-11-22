@@ -99,6 +99,12 @@ env:
     url:
   extractable:
     url:
+  jobnik:
+    url:
+    ingestion:
+      stages:
+        extraction:
+          enabled:
 
 telemetry:
   logger:

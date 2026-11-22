@@ -21,6 +21,7 @@ const filesOf = (folder: string): IngestionFiles => ({
   modelPath: join(folder, 'data/tileset.json'),
   product: shapefile(folder, 'Product'),
   metadata: shapefile(folder, 'ShapeMetadata'),
+  relativePaths: { modelPath: 'paris/data/tileset.json', metadataShapefilePath: 'paris/shape/ShapeMetadata.shp' },
 });
 
 describe('MetadataExtractor', function () {

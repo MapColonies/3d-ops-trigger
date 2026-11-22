@@ -1,5 +1,5 @@
 import { readFile, stat } from 'node:fs/promises';
-import { basename, dirname, extname, join, resolve, sep } from 'node:path';
+import { basename, dirname, extname, join, posix, relative, resolve, sep } from 'node:path';
 import type { Logger } from '@map-colonies/js-logger';
 import { StatusCodes } from 'http-status-codes';
 import { inject, injectable } from 'tsyringe';
@@ -60,7 +60,12 @@ export class FilesValidator {
     await this.validateShapefileFormat(metadata);
 
     this.logger.info({ msg: 'ingestion files are valid', logContext, modelPath: payload.modelPath });
-    return { modelPath, product, metadata };
+    return {
+      modelPath,
+      product,
+      metadata,
+      relativePaths: { modelPath: this.toRelativePath(modelPath), metadataShapefilePath: this.toRelativePath(metadataShapefilePath) },
+    };
   }
 
   private reject(logContext: LogContext, message: string, details: Record<string, unknown>): never {
@@ -82,6 +87,10 @@ export class FilesValidator {
       this.reject(logContext, `${field}: ${ERROR_PATH_OUTSIDE_BASE}`, { path: sharePath, basePath: this.basePath });
     }
     return mountedPath;
+  }
+
+  private toRelativePath(mountedPath: string): string {
+    return relative(this.pvPath, mountedPath).split(sep).join(posix.sep);
   }
 
   private validateLayout(modelPath: string, productShapefilePath: string, metadataShapefilePath: string): void {

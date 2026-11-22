@@ -41,6 +41,16 @@
       "subUrl": "lookup-tables/lookupData"
     }
   },
+  "jobnik": {
+    "url": "http://127.0.0.1:8080",
+    "ingestion": {
+      "stages": {
+        "extraction": {
+          "enabled": false
+        }
+      }
+    }
+  },
   "productReader": {
     "maxVerticesPerChunk": 10000
   },

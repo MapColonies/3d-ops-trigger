@@ -5,23 +5,20 @@ import type { Logger } from '@map-colonies/js-logger';
 import { StatusCodes } from 'http-status-codes';
 import { inject, injectable } from 'tsyringe';
 import { TilesetError, TilesetSources, type TilesetSource } from '3d-tiles-tools';
-import {
-  AppError,
-  calculatePolygonFromTileset,
-  ERROR_BAD_FORMAT_TILESET,
-  ERROR_BOX_TILESET,
-  type LogContext,
-  type TileSetJson,
-} from '@map-colonies/3d-shared';
+import { AppError, type LogContext } from '@map-colonies/3d-shared';
 import { SERVICES } from '@common/constants';
 import {
   ARCHIVE_EXTENSION,
   ERROR_3TZ_INVALID,
   ERROR_3TZ_INVALID_PREFIX,
+  ERROR_BAD_FORMAT_TILESET,
+  ERROR_BOX_TILESET,
   ERROR_TILESET_INVALID,
   ERROR_TILESET_NOT_IN_ARCHIVE,
   TILESET_FILENAME,
 } from './constants';
+import type { TileSetJson } from './interfaces';
+import { calculatePolygonFromTileset } from './tilesetPolygon';
 
 @injectable()
 export class TilesetReader {

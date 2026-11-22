@@ -4,9 +4,16 @@ import { StatusCodes } from 'http-status-codes';
 import { AppError } from '@map-colonies/3d-shared';
 import type { IFindRecordsPayload } from '@map-colonies/3d-shared';
 import { bboxPolygon } from '@turf/turf';
-import { ValidationManager, ERROR_METADATA_PRODUCT_ID_UNIQUE, ERROR_METADATA_PRODUCT_NAME_UNIQUE } from '@src/validator/validationManager';
+import {
+  ValidationManager,
+  ERROR_3TZ_DISABLED,
+  ERROR_JOB_IN_FLIGHT,
+  ERROR_METADATA_PRODUCT_ID_UNIQUE,
+  ERROR_METADATA_PRODUCT_NAME_UNIQUE,
+} from '@src/validator/validationManager';
 import type { LookupTablesClient } from '@src/externalServices/lookupTables/lookupTablesClient';
 import type { CatalogClient } from '@src/externalServices/catalog/catalogClient';
+import type { JobnikClient } from '@src/externalServices/jobnik/jobnikClient';
 import type { ConfigType } from '@src/common/config';
 import { ERROR_FOOTPRINT_COVERAGE_FAILED, ERROR_FOOTPRINT_FAR_FROM_MODEL } from '@src/extractor/constants';
 import { buildValidPayload, buildProductIdentity } from '@tests/helpers/metadata';
@@ -18,18 +25,51 @@ const lookupStub = {
 
 const product = buildProductIdentity();
 const INTERSECTION_PERCENTAGE_LIMIT = 10;
-const configStub = { get: vi.fn().mockReturnValue(INTERSECTION_PERCENTAGE_LIMIT) } as unknown as ConfigType;
+const configOf = (isExtractionEnabled: boolean): ConfigType =>
+  ({
+    get: vi.fn((key: string) => (key === 'jobnik.ingestion.stages.extraction.enabled' ? isExtractionEnabled : INTERSECTION_PERCENTAGE_LIMIT)),
+  }) as unknown as ConfigType;
 const modelPolygon = bboxPolygon([2.33, 48.85, 2.35, 48.87]).geometry;
 
 describe('ValidationManager', function () {
   let validator: ValidationManager;
   let catalogStub: CatalogClient;
   let findRecords: ReturnType<typeof vi.fn<(payload: IFindRecordsPayload) => Promise<unknown[]>>>;
+  let hasInFlightIngestionJob: ReturnType<typeof vi.fn>;
+
+  const create = async (isExtractionEnabled = false): Promise<ValidationManager> =>
+    new ValidationManager(configOf(isExtractionEnabled), await jsLogger({ enabled: false }), lookupStub, catalogStub, {
+      hasInFlightIngestionJob,
+    } as unknown as JobnikClient);
 
   beforeEach(async function () {
     findRecords = vi.fn<(payload: IFindRecordsPayload) => Promise<unknown[]>>().mockResolvedValue([]);
+    hasInFlightIngestionJob = vi.fn().mockResolvedValue(false);
     catalogStub = { findRecords } as unknown as CatalogClient;
-    validator = new ValidationManager(configStub, await jsLogger({ enabled: false }), lookupStub, catalogStub);
+    validator = await create();
+  });
+
+  it('should throw 400 when an ingestion job for the product is already in progress', async function () {
+    hasInFlightIngestionJob.mockResolvedValue(true);
+
+    await expect(validator.validateIngestion(buildValidPayload(), product)).rejects.toThrow(ERROR_JOB_IN_FLIGHT);
+    expect(hasInFlightIngestionJob).toHaveBeenCalledWith(product);
+  });
+
+  describe('validateModelFormatEnabled', function () {
+    it('should reject a .3tz model when extraction is disabled', function () {
+      expect(() => validator.validateModelFormatEnabled('\\\\share\\paris\\data\\model.3TZ')).toThrow(ERROR_3TZ_DISABLED);
+    });
+
+    it('should accept a .3tz model when extraction is enabled', async function () {
+      const enabled = await create(true);
+
+      expect(() => enabled.validateModelFormatEnabled('\\\\share\\paris\\data\\model.3tz')).not.toThrow();
+    });
+
+    it('should accept a tileset.json when extraction is disabled', function () {
+      expect(() => validator.validateModelFormatEnabled('\\\\share\\paris\\data\\tileset.json')).not.toThrow();
+    });
   });
 
   it('should pass fully valid form fields and a unique product', async function () {
