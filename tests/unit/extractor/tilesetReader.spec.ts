@@ -6,9 +6,15 @@ import { StatusCodes } from 'http-status-codes';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { TilesetTarget3tz } from '3d-tiles-tools';
 import { AppError } from '@map-colonies/3d-shared';
-import { ERROR_BAD_FORMAT_TILESET, ERROR_BOX_TILESET } from '@map-colonies/3d-shared/tileset';
 import { TilesetReader } from '@src/extractor/tilesetReader';
-import { ERROR_3TZ_INVALID, ERROR_3TZ_INVALID_PREFIX, ERROR_TILESET_INVALID, ERROR_TILESET_NOT_IN_ARCHIVE } from '@src/extractor/constants';
+import {
+  ERROR_3TZ_INVALID,
+  ERROR_3TZ_INVALID_PREFIX,
+  ERROR_BAD_FORMAT_TILESET,
+  ERROR_BOX_TILESET,
+  ERROR_TILESET_INVALID,
+  ERROR_TILESET_NOT_IN_ARCHIVE,
+} from '@src/extractor/constants';
 
 const FIXTURE_DATA = join(__dirname, '../../fixtures/ingestion/paris/data');
 const PARIS_BBOX = [2.33, 48.85, 2.35, 48.87];

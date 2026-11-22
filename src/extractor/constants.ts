@@ -11,3 +11,9 @@ export const ERROR_3TZ_INVALID_PREFIX = '.3tz archive is invalid';
 export const ERROR_TILESET_NOT_IN_ARCHIVE = `.3tz archive must contain ${TILESET_FILENAME} at its root`;
 export const ERROR_FOOTPRINT_FAR_FROM_MODEL = "Wrong footprint! footprint's coordinates are not even close to the model";
 export const ERROR_FOOTPRINT_COVERAGE_FAILED = 'failed to calculate the footprint coverage of the model';
+export const ERROR_BOX_TILESET = 'BoundingVolume of box is not supported yet. Please contact 3D team.';
+export const ERROR_BAD_FORMAT_TILESET = 'Bad tileset format. Should be in 3DTiles format';
+export const PROJECTIONS = {
+  sphere: '+proj=geocent +datum=WGS84 +units=m +no_defs +type=crs',
+  region: '+proj=longlat +datum=WGS84 +no_defs +type=crs',
+} as const;
